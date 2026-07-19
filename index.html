@@ -185,6 +185,75 @@
             font-style: italic;
         }
 
+        /* ===== 移动端专用：按天分组的日程列表 =====
+           桌面表格是"节次行 × 星期列"的网格，直接把<table>拆成块状卡片会导致
+           同一天的课被拆散到不同节次区块里、顺序很乱。这里改用JS单独生成一份
+           "星期一→星期日"固定顺序、每天内部再按节次排序的结构，桌面/移动各显示一份。 */
+        .mobile-view { display: none; }
+        .day-block {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        .day-block-header {
+            background: var(--th-bg);
+            color: var(--th-text);
+            font-weight: 700;
+            font-size: 0.95rem;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .day-block-header .count {
+            font-weight: 500;
+            font-size: 0.78rem;
+            color: var(--text-light);
+        }
+        .day-block-body { padding: 10px 12px; }
+        .day-empty {
+            padding: 6px 2px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+        .mobile-course-card {
+            background-color: var(--theory-card-bg);
+            border: 1px solid var(--theory-card-border);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+        }
+        .mobile-course-card:last-child { margin-bottom: 0; }
+        .mobile-course-card.practical {
+            background-color: var(--practical-card-bg);
+            border: 1px solid var(--practical-card-border);
+            border-left: 4px solid var(--practical-accent);
+        }
+        .mobile-course-time {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+        .mobile-course-card.practical .mobile-course-time { color: var(--practical-accent); }
+        .mobile-course-name {
+            font-weight: bold;
+            color: var(--theory-name);
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+        .mobile-course-card.practical .mobile-course-name { color: var(--practical-name); }
+        .mobile-course-info {
+            color: var(--text-light);
+            font-size: 0.82rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 2px;
+        }
+
         /* 移动端适配（iOS / 安卓） */
         @media (max-width: 768px) {
             body { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
@@ -193,54 +262,8 @@
             .header h1 { font-size: 1.2rem; }
             .controls { width: 100%; }
             .week-selector { width: 100%; }
-            table { min-width: 100%; display: block; }
-            thead { display: none; }
-            tbody { display: block; width: 100%; }
-            tr {
-                display: block;
-                margin-bottom: 16px;
-                border: 1px solid var(--border);
-                border-radius: 8px;
-                overflow: hidden;
-            }
-            td, th {
-                display: block;
-                width: auto;
-                border: none;
-                border-bottom: 1px solid var(--border);
-                text-align: left;
-                position: relative;
-                padding: 12px 12px 12px 92px;
-                min-height: 44px;
-            }
-            td:last-child { border-bottom: none; }
-            .time-col {
-                background: var(--th-bg);
-                padding: 12px;
-                font-weight: bold;
-                text-align: center;
-                border-bottom: 2px solid var(--border);
-                min-height: auto;
-            }
-            td:before {
-                content: attr(data-label);
-                position: absolute;
-                left: 12px;
-                top: 12px;
-                font-weight: 600;
-                color: var(--text-light);
-            }
-            /* 本时段没有任何课程时，给出明确提示，避免卡片看起来像加载不全 */
-            tr[data-empty="true"] .time-col::after {
-                content: "本时段暂无课程安排";
-                display: block;
-                margin-top: 6px;
-                font-size: 12px;
-                font-weight: 400;
-                color: var(--text-light);
-            }
-            /* 移动端隐藏没有课的空白天数 */
-            td:empty { display: none; }
+            .desktop-view { display: none; }
+            .mobile-view { display: block; }
         }
 
         /* 底部安全区（全面屏手势条）额外留白 */
@@ -257,7 +280,7 @@
                 <select id="week-select" class="week-selector"></select>
             </div>
         </div>
-        <div class="table-responsive">
+        <div class="table-responsive desktop-view">
             <table id="schedule-table">
                 <thead>
                     <tr>
@@ -279,6 +302,9 @@
                 本周无任何课程安排
             </div>
         </div>
+
+        <!-- 移动端：按"星期一→星期日"顺序分组展示，每天内部再按节次时间排序，避免手机上按节次分块导致同一天的课被拆散到多处 -->
+        <div class="mobile-view" id="mobileView"></div>
     </div>
 
     <script>
@@ -327,6 +353,17 @@
             { id: "full", name: "全天<br><span style='font-size:0.8em;color:#9CA3AF'>实训/实践</span>" }
         ];
 
+        // 每个节次对应的具体时间文案与排序权重（"full"全天类排在最前，代表当天以集中实训为主）
+        const periodMeta = {
+            "full":  { label: "全天",     time: "集中实训/实践安排", order: 0 },
+            "1-2":   { label: "1-2节",   time: "08:00-09:40",      order: 1 },
+            "3-4":   { label: "3-4节",   time: "10:00-11:40",      order: 2 },
+            "5-6":   { label: "5-6节",   time: "14:00-15:35",      order: 3 },
+            "7-8":   { label: "7-8节",   time: "15:55-17:30",      order: 4 },
+            "9-10":  { label: "9-10节",  time: "18:00-19:40",      order: 5 },
+            "11-12": { label: "11-12节", time: "19:50-21:30",      order: 6 }
+        };
+
         const days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 
         // 初始化
@@ -362,10 +399,6 @@
                 const th = document.createElement("td");
                 th.className = "time-col";
                 th.innerHTML = slot.name;
-                // 移动端处理
-                if(window.innerWidth <= 768) {
-                    th.style.display = 'block';
-                }
                 tr.appendChild(th);
 
                 let rowCourseCount = 0;
@@ -424,6 +457,60 @@
             } else {
                 table.style.display = "table";
                 emptyState.style.display = "none";
+            }
+
+            renderMobileView(week);
+        }
+
+        // 移动端渲染：固定按"星期一→星期日"顺序分组，每天内部再按节次时间先后排序
+        function renderMobileView(week) {
+            const container = document.getElementById("mobileView");
+            container.innerHTML = "";
+
+            for (let dayIndex = 1; dayIndex <= 7; dayIndex++) {
+                const dayCourses = courses.filter(c => {
+                    const isWeekMatch = week >= c.weekStart && week <= c.weekEnd;
+                    const targetDay = (c.day === "all") ? (dayIndex <= 5 ? "all" : null) : c.day;
+                    const isDayMatch = (targetDay === "all") || (targetDay === dayIndex);
+                    return isWeekMatch && isDayMatch;
+                }).sort((a, b) => periodMeta[a.time].order - periodMeta[b.time].order);
+
+                const block = document.createElement("div");
+                block.className = "day-block";
+
+                const header = document.createElement("div");
+                header.className = "day-block-header";
+                header.innerHTML = `<span>${days[dayIndex - 1]}</span><span class="count">${dayCourses.length > 0 ? dayCourses.length + " 项" : ""}</span>`;
+                block.appendChild(header);
+
+                const body = document.createElement("div");
+                body.className = "day-block-body";
+
+                if (dayCourses.length === 0) {
+                    body.innerHTML = `<div class="day-empty">本日无课</div>`;
+                } else {
+                    dayCourses.forEach(c => {
+                        const meta = periodMeta[c.time];
+                        const card = document.createElement("div");
+                        card.className = "mobile-course-card" + (c.type === "practical" ? " practical" : "");
+                        card.innerHTML = `
+                            <div class="mobile-course-time">${meta.label} · ${meta.time}</div>
+                            <div class="mobile-course-name">${c.name}</div>
+                            <div class="mobile-course-info">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                ${c.teacher}
+                            </div>
+                            <div class="mobile-course-info">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                ${c.room}
+                            </div>
+                        `;
+                        body.appendChild(card);
+                    });
+                }
+
+                block.appendChild(body);
+                container.appendChild(block);
             }
         }
 
