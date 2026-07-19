@@ -133,6 +133,11 @@
             font-weight: 500;
             vertical-align: middle;
             color: var(--text-light);
+            /* 横向滚动时把节次/时间这一列固定在最左侧，类似电脑端表格的"冻结首列" */
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
         }
         .course-card {
             background-color: var(--theory-card-bg);
@@ -183,6 +188,31 @@
             padding: 40px;
             color: var(--text-light);
             font-style: italic;
+        }
+
+        /* 移动端"列表视图 / 网格视图"切换按钮，仅在手机宽度下显示 */
+        .mobile-view-toggle {
+            display: none;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .mobile-view-toggle .toggle-btn {
+            flex: 1;
+            min-height: 40px;
+            padding: 8px 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text-light);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .mobile-view-toggle .toggle-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
         }
 
         /* ===== 移动端专用：按天分组的日程列表 =====
@@ -262,8 +292,19 @@
             .header h1 { font-size: 1.2rem; }
             .controls { width: 100%; }
             .week-selector { width: 100%; }
+            .mobile-view-toggle { display: flex; }
+            /* 默认（列表模式）：显示按天分组列表，隐藏网格表格 */
             .desktop-view { display: none; }
             .mobile-view { display: block; }
+            /* 切换到"网格视图"后：显示电脑端同款表格，横向滑动查看，节次列固定不动 */
+            body.mobile-grid-view .desktop-view {
+                display: block;
+                -webkit-overflow-scrolling: touch;
+            }
+            body.mobile-grid-view .mobile-view { display: none; }
+            body.mobile-grid-view table { min-width: 640px; }
+            body.mobile-grid-view .course-card { font-size: 0.78rem; padding: 8px 6px; }
+            body.mobile-grid-view .course-info { font-size: 0.72rem; }
         }
 
         /* 底部安全区（全面屏手势条）额外留白 */
@@ -279,6 +320,10 @@
             <div class="controls">
                 <select id="week-select" class="week-selector"></select>
             </div>
+        </div>
+        <div class="mobile-view-toggle" id="mobileViewToggle">
+            <button type="button" class="toggle-btn" data-mode="list">列表视图</button>
+            <button type="button" class="toggle-btn" data-mode="grid">网格视图</button>
         </div>
         <div class="table-responsive desktop-view">
             <table id="schedule-table">
@@ -366,6 +411,15 @@
 
         const days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 
+        // 移动端"列表视图 / 网格视图"切换（记住上次选择）
+        function setMobileViewMode(mode) {
+            document.body.classList.toggle("mobile-grid-view", mode === "grid");
+            document.querySelectorAll(".mobile-view-toggle .toggle-btn").forEach(btn => {
+                btn.classList.toggle("active", btn.dataset.mode === mode);
+            });
+            try { localStorage.setItem("scheduleMobileViewMode", mode); } catch (e) {}
+        }
+
         // 初始化
         function init() {
             const select = document.getElementById("week-select");
@@ -375,11 +429,18 @@
                 option.text = `第 ${i} 周 ${i <= 8 ? "(理论教学)" : "(实训设计)"}`;
                 select.appendChild(option);
             }
-            
+
             select.addEventListener("change", (e) => {
                 renderSchedule(parseInt(e.target.value));
             });
-            
+
+            document.querySelectorAll(".mobile-view-toggle .toggle-btn").forEach(btn => {
+                btn.addEventListener("click", () => setMobileViewMode(btn.dataset.mode));
+            });
+            let savedMode = "list";
+            try { savedMode = localStorage.getItem("scheduleMobileViewMode") || "list"; } catch (e) {}
+            setMobileViewMode(savedMode);
+
             // 默认渲染第1周
             renderSchedule(1);
         }
