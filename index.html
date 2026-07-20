@@ -179,11 +179,11 @@
             font-size: 0.85rem;
             margin-bottom: 3px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 4px;
         }
-        /* 图标固定大小不被压缩，文字部分负责在单元格变窄时决定是否省略 */
-        .course-info svg { flex-shrink: 0; }
+        /* 图标固定大小不被压缩；图标顶部对齐第一行文字，而不是被换行后的多行文字挤到中间 */
+        .course-info svg { flex-shrink: 0; margin-top: 2px; }
         .course-info .info-text { min-width: 0; }
         
         .empty-state {
@@ -305,21 +305,14 @@
                 -webkit-overflow-scrolling: touch;
             }
             body.mobile-grid-view .mobile-view { display: none; }
-            /* 每个星期列给够约140px，避免中文老师姓名/课程名因为列太窄而被逐字换行(看起来像竖排) */
+            /* 每个星期列给够约140px（和电脑端单列宽度接近），文字按正常规则换行，
+               不再强制单行省略——手机上长按/悬停基本看不到title提示，省略号会让
+               老师名单看不全，所以改成"宽度够大+正常多行换行"来还原电脑端效果 */
             body.mobile-grid-view table { min-width: 1050px; }
             body.mobile-grid-view th, body.mobile-grid-view td { padding: 6px; }
             body.mobile-grid-view .time-col { width: 74px; padding: 8px 4px; font-size: 0.78rem; }
             body.mobile-grid-view .course-card { font-size: 0.78rem; padding: 8px 6px; }
             body.mobile-grid-view .course-info { font-size: 0.72rem; }
-            /* 课程名/老师/教室统一强制单行显示：宽度不够就用省略号，绝不逐字换行 */
-            body.mobile-grid-view .course-name,
-            body.mobile-grid-view .course-info .info-text {
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                display: block;
-            }
-            body.mobile-grid-view .course-info .info-text { flex: 1; }
         }
 
         /* 底部安全区（全面屏手势条）额外留白 */
