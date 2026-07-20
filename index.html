@@ -182,6 +182,9 @@
             align-items: center;
             gap: 4px;
         }
+        /* 图标固定大小不被压缩，文字部分负责在单元格变窄时决定是否省略 */
+        .course-info svg { flex-shrink: 0; }
+        .course-info .info-text { min-width: 0; }
         
         .empty-state {
             text-align: center;
@@ -302,10 +305,21 @@
                 -webkit-overflow-scrolling: touch;
             }
             body.mobile-grid-view .mobile-view { display: none; }
-            body.mobile-grid-view table { min-width: 640px; }
+            /* 每个星期列给够约140px，避免中文老师姓名/课程名因为列太窄而被逐字换行(看起来像竖排) */
+            body.mobile-grid-view table { min-width: 1050px; }
+            body.mobile-grid-view th, body.mobile-grid-view td { padding: 6px; }
             body.mobile-grid-view .time-col { width: 74px; padding: 8px 4px; font-size: 0.78rem; }
             body.mobile-grid-view .course-card { font-size: 0.78rem; padding: 8px 6px; }
             body.mobile-grid-view .course-info { font-size: 0.72rem; }
+            /* 课程名/老师/教室统一强制单行显示：宽度不够就用省略号，绝不逐字换行 */
+            body.mobile-grid-view .course-name,
+            body.mobile-grid-view .course-info .info-text {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                display: block;
+            }
+            body.mobile-grid-view .course-info .info-text { flex: 1; }
         }
 
         /* 底部安全区（全面屏手势条）额外留白 */
@@ -489,14 +503,14 @@
                         const div = document.createElement("div");
                         div.className = "course-card" + (c.type === "practical" ? " practical" : "");
                         div.innerHTML = `
-                            <div class="course-name">${c.name}</div>
+                            <div class="course-name" title="${c.name}">${c.name}</div>
                             <div class="course-info">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                                ${c.teacher}
+                                <span class="info-text" title="${c.teacher}">${c.teacher}</span>
                             </div>
                             <div class="course-info">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                ${c.room}
+                                <span class="info-text" title="${c.room}">${c.room}</span>
                             </div>
                         `;
                         td.appendChild(div);
