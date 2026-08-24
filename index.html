@@ -195,6 +195,22 @@
             color: var(--primary);
         }
         td.today-col { background: var(--today-cell-bg); }
+        /* 表头里星期名下面那行日期 */
+        .day-date {
+            display: block;
+            margin-top: 2px;
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: var(--text-light);
+        }
+        thead th.today-col .day-date { color: var(--primary); }
+        /* 移动端按天卡片：日期跟在星期名后面同一行，不另起一行占高度 */
+        .day-block-header .day-date {
+            display: inline;
+            margin: 0 0 0 6px;
+            font-size: 0.8rem;
+        }
+
         /* 表头「今日」小徽标；用 block 独占一行，避免和星期名挤在一起 */
         .today-badge {
             display: block;
@@ -938,13 +954,13 @@
                 <thead>
                     <tr>
                         <th class="time-col">节次/时间<br><span class="time-col-basis">三教基准</span></th>
-                        <th>星期一</th>
-                        <th>星期二</th>
-                        <th>星期三</th>
-                        <th>星期四</th>
-                        <th>星期五</th>
-                        <th>星期六</th>
-                        <th>星期日</th>
+                        <th><span class="day-name">星期一</span></th>
+                        <th><span class="day-name">星期二</span></th>
+                        <th><span class="day-name">星期三</span></th>
+                        <th><span class="day-name">星期四</span></th>
+                        <th><span class="day-name">星期五</span></th>
+                        <th><span class="day-name">星期六</span></th>
+                        <th><span class="day-name">星期日</span></th>
                     </tr>
                 </thead>
                 <tbody id="schedule-body">
@@ -1146,6 +1162,18 @@
         const todayDayIndex = getTodayDayIndex();
         const realCurrentWeek = getRealCurrentWeek();
         const semesterActive = isWithinSemester();
+
+        // 第 week 教学周的星期 dayIndex(1~7) 对应的真实日期
+        function dateOfWeekDay(week, dayIndex) {
+            const d = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
+            d.setDate(d.getDate() + (week - 1) * 7 + (dayIndex - 1));
+            return d;
+        }
+
+        // 表头/日期卡片上显示的短日期。不补零，"8/25" 比 "08/25" 省一截宽度
+        function shortDate(date) {
+            return (date.getMonth() + 1) + "/" + date.getDate();
+        }
 
         // 只有"学期进行中"且正在看的就是本周时，才在表格里标今日
         function shouldMarkToday(week) {
@@ -1503,12 +1531,24 @@
             goToWeek(getWeekFromUrl() || realCurrentWeek);
         }
 
-        // 表头的"今日"标记：只有正在看本周时才标，翻到别的周就撤掉
+        // 表头：刷新每一列的日期，以及"今日"标记。
+        // 日期跟着周次走，翻周的时候整行日期都会变——这样才知道第 N 周到底是哪几天。
         function updateTodayHeader(week) {
             const mark = shouldMarkToday(week);
             document.querySelectorAll("#schedule-table thead th").forEach((th, i) => {
                 // i=0 是"节次/时间"表头，星期一~日对应 i=1..7
                 if (i === 0) return;
+
+                // 日期（星期名下面那行小字）
+                let dateEl = th.querySelector(".day-date");
+                if (!dateEl) {
+                    dateEl = document.createElement("span");
+                    dateEl.className = "day-date";
+                    th.appendChild(dateEl);
+                }
+                dateEl.textContent = shortDate(dateOfWeekDay(week, i));
+
+                // 今日标记
                 const isToday = mark && i === todayDayIndex;
                 th.classList.toggle("today-col", isToday);
                 const existing = th.querySelector(".today-badge");
@@ -1629,7 +1669,7 @@
 
                 const header = document.createElement("div");
                 header.className = "day-block-header";
-                header.innerHTML = `<span>${days[dayIndex - 1]}${isToday ? '<span class="today-badge">今日</span>' : ""}</span><span class="count">${dayCourses.length > 0 ? dayCourses.length + " 项" : ""}</span>`;
+                header.innerHTML = `<span>${days[dayIndex - 1]}<span class="day-date">${shortDate(dateOfWeekDay(week, dayIndex))}</span>${isToday ? '<span class="today-badge">今日</span>' : ""}</span><span class="count">${dayCourses.length > 0 ? dayCourses.length + " 项" : ""}</span>`;
                 block.appendChild(header);
 
                 const body = document.createElement("div");
