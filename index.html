@@ -416,6 +416,143 @@
         }
         .time-footnote strong { color: var(--text-main); }
         .time-footnote ul { margin: 6px 0 0; padding-left: 1.2em; }
+        .footnote-caveat {
+            margin: 10px 0 0;
+            font-size: 0.78rem;
+            line-height: 1.6;
+        }
+        /* 打开作息表的按钮：跟正文同一行内的次要操作，做成描边胶囊 */
+        .timesheet-open-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 10px 0 0;
+            padding: 8px 14px;
+            min-height: 40px;
+            border: 1px solid var(--primary);
+            border-radius: 999px;
+            background: transparent;
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        @media (hover: hover) {
+            .timesheet-open-btn:hover { background: var(--primary); color: #fff; }
+        }
+
+        /* ===== 作息表弹窗 ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+            background: rgba(15, 23, 42, 0.55);
+        }
+        .modal-overlay[hidden] { display: none; }
+        .modal-card {
+            width: 100%;
+            max-width: 560px;
+            max-height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 20px;
+            border-radius: 12px;
+            background: var(--card-bg);
+            box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.35);
+        }
+        .modal-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .modal-title {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-main);
+        }
+        .modal-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            margin: -8px -8px 0 0;
+            padding: 0;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-light);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        @media (hover: hover) {
+            .modal-close:hover { background: var(--th-bg); color: var(--text-main); }
+        }
+        .modal-sub, .modal-note {
+            margin: 10px 0 0;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: var(--text-light);
+        }
+        .modal-sub strong, .modal-note strong { color: var(--text-main); }
+        .timesheet-table {
+            width: 100%;
+            /* 全局 table 规则里有 min-width:800px（那是给 7 列的主课表配横向滚动用的），
+               弹窗这张 4 列小表必须显式复位，否则会把弹窗撑出横向滚动条、挤掉东教那一列 */
+            min-width: 0;
+            margin-top: 14px;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 0.82rem;
+        }
+        .timesheet-table th,
+        .timesheet-table td {
+            padding: 8px 4px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            /* 时间串本身不带空格，窄屏也不用横向滚动，正常显示得下 */
+            white-space: nowrap;
+        }
+        .timesheet-table thead th {
+            font-size: 0.78rem;
+            color: var(--th-text);
+            background: var(--th-bg);
+        }
+        .timesheet-table .slot-name {
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        /* 三教是左侧节次列的基准，整列描出来 */
+        .timesheet-table .is-base {
+            background: var(--theory-card-bg);
+            color: var(--theory-name);
+            font-weight: 600;
+        }
+        .timesheet-table thead .is-base { color: var(--primary); }
+        /* 课间/午休行压低存在感，别和上课节次抢 */
+        .timesheet-table .is-break td {
+            color: var(--text-light);
+            font-size: 0.76rem;
+        }
+        .timesheet-table .is-break .slot-name { font-weight: 500; }
+        .break-tag {
+            font-size: 0.68rem;
+            opacity: 0.85;
+        }
+        @media (max-width: 480px) {
+            .modal-card { padding: 16px; }
+            .timesheet-table { font-size: 0.74rem; }
+            .timesheet-table th, .timesheet-table td { padding: 7px 2px; }
+            .timesheet-table .is-break td { font-size: 0.7rem; }
+        }
         .course-info {
             color: var(--text-light);
             font-size: 0.85rem;
@@ -625,13 +762,80 @@
 
         <!-- 各教学楼作息差异说明：同一节次在不同教学楼的起止时间不同，卡片上的时间才是实际时间 -->
         <div class="time-footnote">
-            <strong>⏱ 关于上课时间</strong>：左侧节次列<strong>以第三教学楼（三教）作息为基准</strong>；在二教、东教上的课时间不一样，<strong>每张课程卡片上的时间才是这门课的实际起止时间</strong>。各教学楼作息差异：
-            <ul>
-                <li><strong>第三教学楼（卡片上写"三教"）</strong>：1-2 节 08:00-09:40，3-4 节 10:20-12:00（大课间休息 40 分钟），5-6 节 14:00-15:35</li>
-                <li><strong>第二教学楼（卡片上写"二教"）</strong>：3-4 节提前到 10:00-11:40 上课，1-2 节、5-6 节与三教相同</li>
-                <li><strong>东教学楼（卡片上写"东教"）</strong>：3-4 节 10:20-11:50；且 1-2 节、3-4 节两小节之间<strong>无 10 分钟课间</strong>，所以 1-2 节 09:30 就下课</li>
-            </ul>
-            <p style="margin:8px 0 0">注：7-8 / 9-10 / 11-12 节本学期无排课，左侧显示的时间沿用建站时的旧数据，<strong>未经《课程安排.txt》核实</strong>，仅作占位参考。</p>
+            <strong>⏱ 关于上课时间</strong>：左侧节次列<strong>以第三教学楼（三教）作息为基准</strong>；二教、东教的时间不一样，<strong>每张课程卡片上的时间才是这门课的实际起止时间</strong>。
+            <button type="button" class="timesheet-open-btn" id="btn-open-timesheet">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                查看各教学楼完整作息表
+            </button>
+            <p class="footnote-caveat">注：11-12 节本学期无排课，左侧显示的 19:50-21:30 沿用建站时的旧数据，<strong>校方作息表里查不到这一节次</strong>，仅作占位。</p>
+        </div>
+
+        <!-- 各教学楼作息表弹窗 -->
+        <div class="modal-overlay" id="timesheet-modal" role="dialog" aria-modal="true" aria-labelledby="timesheet-title" hidden>
+            <div class="modal-card">
+                <div class="modal-head">
+                    <h2 class="modal-title" id="timesheet-title">各教学楼上课时间对照</h2>
+                    <button type="button" class="modal-close" id="btn-close-timesheet" aria-label="关闭">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <p class="modal-sub">同一个节次在不同教学楼的起止时间不一样，尤其上午 3-4 节差了 20 分钟。<strong>三教这一列就是左侧节次列的基准。</strong></p>
+                <table class="timesheet-table">
+                    <thead>
+                        <tr>
+                            <th>节次</th>
+                            <th>一/二教</th>
+                            <th class="is-base">三教</th>
+                            <th>东教</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="slot-name">1-2节</td>
+                            <td>08:00-09:40</td>
+                            <td class="is-base">08:00-09:40</td>
+                            <td>08:00-09:30</td>
+                        </tr>
+                        <tr class="is-break">
+                            <td class="slot-name">课间</td>
+                            <td>09:40-10:00</td>
+                            <td class="is-base">09:40-10:20<br><span class="break-tag">大课间</span></td>
+                            <td>09:30-10:20</td>
+                        </tr>
+                        <tr>
+                            <td class="slot-name">3-4节</td>
+                            <td>10:00-11:40</td>
+                            <td class="is-base">10:20-12:00</td>
+                            <td>10:20-11:50</td>
+                        </tr>
+                        <tr class="is-break">
+                            <td class="slot-name">午休</td>
+                            <td>11:40-14:00</td>
+                            <td class="is-base">12:00-14:00</td>
+                            <td>11:50-14:00</td>
+                        </tr>
+                        <tr>
+                            <td class="slot-name">5-6节</td>
+                            <td>14:00-15:35</td>
+                            <td class="is-base">14:00-15:35</td>
+                            <td>14:00-15:30</td>
+                        </tr>
+                        <tr>
+                            <td class="slot-name">7-8节</td>
+                            <td>15:55-17:30</td>
+                            <td class="is-base">15:55-17:30</td>
+                            <td>16:00-17:30</td>
+                        </tr>
+                        <tr>
+                            <td class="slot-name">9-10节</td>
+                            <td>18:00-19:40</td>
+                            <td class="is-base">18:00-19:40</td>
+                            <td>18:00-19:40</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="modal-note">东教 1-2 节、3-4 节两小节之间<strong>没有 10 分钟课间</strong>，所以下课比别的楼早；三教上午有 40 分钟大课间，3-4 节推迟到 10:20 才开始。</p>
+            </div>
         </div>
     </div>
 
@@ -642,7 +846,8 @@
         // 东教 1-2 节与 3-4 节两小节之间无 10 分钟课间，所以下课更早。
         // 左侧节次列显示的是"三教基准"时间（用户 2026-08-24 指定），只作参照；
         // 具体某门课几点上，一律以卡片上的 realTime 为准。
-        // 注：7-8/9-10/11-12 节的时间是建站时的旧数据，txt 未收录，本学期这几节也无课。
+        // 7-8 / 9-10 节的三教时间已与校方作息表核对一致（见页面底部的作息表弹窗）；
+        // 只剩 11-12 节的 19:50-21:30 查不到出处，本学期这一节次也无课，暂作占位保留。
         const courses = [
             // ================= 星期一 =================
             { name: "计算机图形学(L)", teacher: "丁革媛", room: "3-A101", building: "三教", realTime: "10:20-12:00", weekStart: 1, weekEnd: 6, day: 1, time: "3-4", type: "theory" },
@@ -974,6 +1179,33 @@
             let savedMode = "list";
             try { savedMode = localStorage.getItem("scheduleMobileViewMode") || "list"; } catch (e) {}
             setMobileViewMode(savedMode);
+
+            // 作息表弹窗：按钮打开，关闭按钮 / 点遮罩 / Esc 三种方式关闭
+            const timesheetModal = document.getElementById("timesheet-modal");
+            const openTimesheetBtn = document.getElementById("btn-open-timesheet");
+            const closeTimesheetBtn = document.getElementById("btn-close-timesheet");
+
+            function openTimesheet() {
+                timesheetModal.hidden = false;
+                // 弹窗打开时锁住背景滚动，免得手机上滑弹窗把底下的页面也带着滚
+                document.body.style.overflow = "hidden";
+                closeTimesheetBtn.focus();
+            }
+            function closeTimesheet() {
+                timesheetModal.hidden = true;
+                document.body.style.overflow = "";
+                openTimesheetBtn.focus();
+            }
+
+            openTimesheetBtn.addEventListener("click", openTimesheet);
+            closeTimesheetBtn.addEventListener("click", closeTimesheet);
+            // 只在点到遮罩本身时关闭，点弹窗内部不关
+            timesheetModal.addEventListener("click", (e) => {
+                if (e.target === timesheetModal) closeTimesheet();
+            });
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" && !timesheetModal.hidden) closeTimesheet();
+            });
 
             // 「下一节课」提示条：点一下跳到那门课所在的周
             document.getElementById("nextClassBar").addEventListener("click", () => {
