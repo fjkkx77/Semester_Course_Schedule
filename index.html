@@ -625,10 +625,14 @@
         }
         .day-block-body { padding: 10px 12px; }
         .day-empty {
-            padding: 6px 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 2px;
             font-size: 0.85rem;
             color: var(--text-light);
         }
+        .day-empty svg { flex: 0 0 auto; opacity: 0.75; }
         .mobile-course-card {
             background-color: var(--theory-card-bg);
             border: 1px solid var(--theory-card-border);
@@ -696,6 +700,59 @@
             body.mobile-grid-view .course-info { font-size: 0.72rem; }
         }
 
+        /* ===== 打印：出一张能贴墙上的纸 ===== */
+        .print-week { display: none; }
+        @media print {
+            /* 交互件在纸上没有意义，全部拿掉 */
+            .controls,
+            .mobile-view-toggle,
+            .next-class-bar,
+            .timesheet-open-btn,
+            .modal-overlay,
+            .footnote-caveat { display: none !important; }
+
+            /* 下拉被隐藏了，改在标题旁边打出当前是第几周 */
+            .print-week {
+                display: inline;
+                margin-left: 10px;
+                font-size: 1rem;
+                font-weight: 500;
+                color: #333;
+            }
+
+            body {
+                background: #fff;
+                padding: 0;
+                font-size: 11pt;
+            }
+            .container {
+                max-width: none;
+                padding: 0;
+                border-radius: 0;
+                background: #fff;
+                box-shadow: none;
+            }
+            .header { margin-bottom: 12px; padding-bottom: 8px; }
+            .header h1 { font-size: 1.15rem; }
+
+            /* 不管屏幕上正在用哪种移动端视图，纸上一律打完整的周网格 */
+            .desktop-view { display: block !important; overflow: visible !important; }
+            .mobile-view { display: none !important; }
+            table { min-width: 0 !important; }
+
+            /* 本周没课的节次行不占纸面，打出来更紧凑 */
+            tbody tr[data-empty="true"] { display: none; }
+
+            /* 浏览器打印默认会丢掉背景色，这里的分段配色和课程卡片底色是信息的一部分 */
+            * {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            /* 别把一行课或一张卡片从中间截到下一页 */
+            tr, .course-card, .time-footnote { break-inside: avoid; }
+            .time-footnote { margin-top: 12px; font-size: 0.75rem; }
+        }
+
         /* 底部安全区（全面屏手势条）额外留白 */
         @supports (padding: max(0px)) {
             .container { padding-bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px)); }
@@ -705,7 +762,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📅 2026-2027第一学期课程排表系统</h1>
+            <h1>📅 2026-2027第一学期课程排表系统<span class="print-week" id="printWeek"></span></h1>
             <div class="controls">
                 <button type="button" class="week-nav-btn" id="btn-prev-week" title="上一周" aria-label="上一周">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
@@ -1037,6 +1094,20 @@
             return null;
         }
 
+        // 课程名尾巴上的 (L)/(E)/(@) 是教务系统的类型标记，给人看的地方去掉更清爽
+        function stripCourseMarker(name) {
+            return name.replace(/\((?:L|E|@)\)$/, "");
+        }
+
+        // 周次下拉里那句阶段说明。从课程数据现推，不写死区间——
+        // 以后改了实训安排，下拉标签会自己跟着变，不用记得来这儿同步
+        function getWeekStageLabel(week) {
+            const practical = findPracticalOfWeek(week);
+            if (practical) return stripCourseMarker(practical.name);
+            const hasTheory = courses.some(c => c.type === "theory" && week >= c.weekStart && week <= c.weekEnd);
+            return hasTheory ? "理论教学" : "无排课";
+        }
+
         // 本周有没有全天实训（理论课找不着时用它兜底，免得实训周提示条一片空白）
         function findPracticalOfWeek(week) {
             const list = courses.filter(c => c.type === "practical" && week >= c.weekStart && week <= c.weekEnd);
@@ -1145,6 +1216,8 @@
             renderSchedule(w);
             syncWeekToUrl(w);
             updateWeekControls(w);
+            // 打印时下拉是隐藏的，得把周次写进标题旁边，否则打出来的纸看不出是第几周
+            document.getElementById("printWeek").textContent = `第 ${w} 周 · ${getWeekStageLabel(w)}`;
         }
 
         // 到头的箭头置灰；已经停在本周时"回到本周"降级成次要态
@@ -1164,7 +1237,7 @@
             for (let i = 1; i <= TOTAL_WEEKS; i++) {
                 const option = document.createElement("option");
                 option.value = i;
-                option.text = `第 ${i} 周 ${i <= 8 ? "(理论教学)" : "(实训设计)"}`;
+                option.text = `第 ${i} 周 (${getWeekStageLabel(i)})`;
                 select.appendChild(option);
             }
 
@@ -1350,7 +1423,12 @@
                 body.className = "day-block-body";
 
                 if (dayCourses.length === 0) {
-                    body.innerHTML = `<div class="day-empty">本日无课</div>`;
+                    // 周末和工作日的"没课"是两种心情，文案分开写
+                    const emptyIcon = dayIndex >= 6
+                        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4Z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>`
+                        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+                    const emptyText = dayIndex >= 6 ? "周末休息，好好放松" : "这天没有排课";
+                    body.innerHTML = `<div class="day-empty">${emptyIcon}<span>${emptyText}</span></div>`;
                 } else {
                     dayCourses.forEach(c => {
                         const meta = periodMeta[c.time];
