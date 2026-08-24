@@ -1485,9 +1485,19 @@
             });
             renderNextClassBar();
             // 倒计时精确到秒，必须每秒重算——每分钟一次的话秒数就是停着的。
-            // 数据量很小（十几条课 × 最多 14 天），每秒跑一次开销可以忽略；
-            // 页面切到后台时浏览器本来就会节流 setInterval，不用自己再判断可见性。
+            // 数据量很小（十几条课 × 最多 14 天），每秒跑一次开销可以忽略。
+            // 注意：每次都是重新 new Date() 取当前时间算差值，不是拿初始值往下累减，
+            // 所以页面开多久都不会累积误差；两台设备显示不一致只会是各自系统时钟不同步。
             setInterval(renderNextClassBar, 1000);
+
+            // 页面切到后台时浏览器会节流甚至冻结 setInterval（手机上尤其明显：
+            // 切到别的 App、锁屏、切标签页都会停）。回到前台那一刻要是等下一次 tick，
+            // 会先闪一下冻结时的旧数字，所以这里主动补一次立即重算。
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) renderNextClassBar();
+            });
+            // iOS 从 bfcache 恢复（比如从别的页面点返回）不触发 load，只触发 pageshow
+            window.addEventListener("pageshow", renderNextClassBar);
 
             // 起始周：地址栏 ?week= 优先（便于分享/收藏某一周），否则按今天定位到当前教学周
             goToWeek(getWeekFromUrl() || realCurrentWeek);
