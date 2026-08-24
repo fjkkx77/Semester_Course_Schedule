@@ -210,6 +210,64 @@
             display: inline-block;
             margin: 0 0 0 8px;
         }
+        /* ===== 「下一节课」提示条 ===== */
+        .next-class-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            margin: 0 0 16px;
+            padding: 12px 14px;
+            border: 1px solid var(--theory-card-border);
+            border-left: 4px solid var(--primary);
+            border-radius: 10px;
+            background: var(--theory-card-bg);
+            color: var(--text-main);
+            font-family: inherit;
+            text-align: left;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .next-class-bar[hidden] { display: none; }
+        /* 正在上课时换成绿色系，和"还没开始"一眼区分 */
+        .next-class-bar.is-ongoing {
+            border-color: var(--practical-card-border);
+            border-left-color: var(--practical-accent);
+            background: var(--practical-card-bg);
+        }
+        .next-class-icon {
+            display: inline-flex;
+            flex: 0 0 auto;
+            color: var(--primary);
+        }
+        .next-class-bar.is-ongoing .next-class-icon { color: var(--practical-accent); }
+        .next-class-body {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .next-class-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+        .next-class-meta {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            line-height: 1.45;
+        }
+        .next-class-arrow {
+            display: inline-flex;
+            flex: 0 0 auto;
+            color: var(--text-light);
+        }
+        .next-class-arrow[hidden] { display: none; }
+        @media (hover: hover) {
+            .next-class-bar:hover { border-color: var(--primary); }
+            .next-class-bar.is-ongoing:hover { border-color: var(--practical-accent); }
+        }
         .table-responsive {
             overflow-x: auto;
         }
@@ -522,6 +580,19 @@
                 <button type="button" class="week-now-btn" id="btn-current-week">回到本周</button>
             </div>
         </div>
+        <!-- 「下一节课」提示条：显示的永远是"现在真实时间"对应的课，
+             和你正在翻看哪一周无关；点它会跳到那门课所在的周次 -->
+        <button type="button" class="next-class-bar" id="nextClassBar" hidden>
+            <span class="next-class-icon" id="nextClassIcon"></span>
+            <span class="next-class-body">
+                <span class="next-class-title" id="nextClassTitle"></span>
+                <span class="next-class-meta" id="nextClassMeta"></span>
+            </span>
+            <span class="next-class-arrow" id="nextClassArrow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </span>
+        </button>
+
         <div class="mobile-view-toggle" id="mobileViewToggle">
             <button type="button" class="toggle-btn" data-mode="list">列表视图</button>
             <button type="button" class="toggle-btn" data-mode="grid">网格视图</button>
@@ -694,6 +765,164 @@
             } catch (e) {}
         }
 
+        // =================== 「下一节课」推算 ===================
+        // 注意：这一块算的永远是"此刻真实时间"对应的课，跟用户正在翻看第几周无关。
+
+        function hhmmToMinutes(hhmm) {
+            const parts = hhmm.split(":");
+            return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+        }
+
+        // 把 realTime("10:20-12:00") 拆成起止分钟数；全天实训没有 realTime，返回 null
+        function courseMinuteRange(c) {
+            if (!c.realTime) return null;
+            const seg = c.realTime.split("-");
+            if (seg.length !== 2) return null;
+            return { start: hhmmToMinutes(seg[0]), end: hhmmToMinutes(seg[1]) };
+        }
+
+        // 某个真实日期落在第几教学周；不在学期内返回 null（和 getRealCurrentWeek 的 clamp 语义不同）
+        function weekOfDate(date) {
+            const start = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
+            const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const diffDays = Math.floor((day - start) / 86400000);
+            if (diffDays < 0) return null;
+            const w = Math.floor(diffDays / 7) + 1;
+            return w <= TOTAL_WEEKS ? w : null;
+        }
+
+        function courseOnDay(c, week, dayIndex) {
+            if (week < c.weekStart || week > c.weekEnd) return false;
+            // 全天实训按现有口径只排周一到周五
+            if (c.day === "all") return dayIndex <= 5;
+            return c.day === dayIndex;
+        }
+
+        // 从今天此刻往后找第一门还没结束的课，最多找 14 天（够跨过实训周里的空档）
+        function findUpcomingClass() {
+            const now = new Date();
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+            for (let offset = 0; offset <= 14; offset++) {
+                const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+                const week = weekOfDate(date);
+                if (week === null) continue;
+                const dayIndex = date.getDay() === 0 ? 7 : date.getDay();
+
+                const todays = courses
+                    .filter(c => courseOnDay(c, week, dayIndex) && c.realTime)
+                    .map(c => ({ course: c, range: courseMinuteRange(c) }))
+                    .filter(x => x.range)
+                    .sort((a, b) => a.range.start - b.range.start);
+
+                for (const item of todays) {
+                    // 今天的课要看是否已经下课；以后的日子直接取当天第一节
+                    if (offset > 0 || nowMinutes < item.range.end) {
+                        return {
+                            course: item.course,
+                            range: item.range,
+                            week: week,
+                            dayIndex: dayIndex,
+                            offset: offset,
+                            ongoing: offset === 0 && nowMinutes >= item.range.start
+                        };
+                    }
+                }
+            }
+            return null;
+        }
+
+        // 本周有没有全天实训（理论课找不着时用它兜底，免得实训周提示条一片空白）
+        function findPracticalOfWeek(week) {
+            const list = courses.filter(c => c.type === "practical" && week >= c.weekStart && week <= c.weekEnd);
+            if (!list.length) return null;
+            // 岗位实践是 13-18 周的长线安排，会和短期专项实训重叠，优先报周期短的那个
+            return list.slice().sort((a, b) => (a.weekEnd - a.weekStart) - (b.weekEnd - b.weekStart))[0];
+        }
+
+        function humanizeGap(minutes) {
+            if (minutes <= 0) return "即将开始";
+            if (minutes < 60) return "还有 " + minutes + " 分钟";
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            return m === 0 ? ("还有 " + h + " 小时") : ("还有 " + h + " 小时 " + m + " 分钟");
+        }
+
+        function offsetLabel(offset, week, dayIndex) {
+            if (offset === 0) return "今天";
+            if (offset === 1) return "明天";
+            if (offset === 2) return "后天";
+            return "第 " + week + " 周 " + days[dayIndex - 1];
+        }
+
+        const ICON_BELL = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>';
+        const ICON_PLAY = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+        const ICON_COFFEE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4Z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>';
+
+        // 提示条要跳转到的周次（点一下直接翻过去）
+        let nextClassTargetWeek = null;
+
+        function renderNextClassBar() {
+            const bar = document.getElementById("nextClassBar");
+            const titleEl = document.getElementById("nextClassTitle");
+            const metaEl = document.getElementById("nextClassMeta");
+            const iconEl = document.getElementById("nextClassIcon");
+            const arrowEl = document.getElementById("nextClassArrow");
+
+            // 学期还没开始或已经结束，这条没有意义，直接不显示
+            if (!semesterActive) {
+                bar.hidden = true;
+                nextClassTargetWeek = null;
+                return;
+            }
+
+            const upcoming = findUpcomingClass();
+
+            if (upcoming) {
+                const c = upcoming.course;
+                const now = new Date();
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                const place = (c.building ? c.building + " " : "") + c.room;
+
+                if (upcoming.ongoing) {
+                    bar.classList.add("is-ongoing");
+                    iconEl.innerHTML = ICON_PLAY;
+                    titleEl.textContent = "正在上课 · " + c.name;
+                    metaEl.textContent = place + " · " + c.teacher + " · " + c.realTime.split("-")[1] + " 下课（" + humanizeGap(upcoming.range.end - nowMinutes) + "）";
+                } else {
+                    bar.classList.remove("is-ongoing");
+                    iconEl.innerHTML = ICON_BELL;
+                    titleEl.textContent = "下一节 · " + c.name;
+                    // 只有"今天"的课报倒计时，跨天了报具体是哪天更有用
+                    const timing = upcoming.offset === 0
+                        ? (c.realTime.split("-")[0] + " 开始（" + humanizeGap(upcoming.range.start - nowMinutes) + "）")
+                        : (offsetLabel(upcoming.offset, upcoming.week, upcoming.dayIndex) + " " + c.realTime);
+                    metaEl.textContent = timing + " · " + place + " · " + c.teacher;
+                }
+
+                nextClassTargetWeek = upcoming.week;
+                arrowEl.hidden = false;
+                bar.hidden = false;
+                return;
+            }
+
+            // 没有理论课了，看看当前这周是不是在实训
+            const practical = findPracticalOfWeek(realCurrentWeek);
+            bar.classList.remove("is-ongoing");
+            iconEl.innerHTML = ICON_COFFEE;
+            arrowEl.hidden = false;
+            nextClassTargetWeek = realCurrentWeek;
+
+            if (practical) {
+                titleEl.textContent = "本周 · " + practical.name;
+                metaEl.textContent = practical.teacher + " · " + practical.room + " · 全天集中安排，无固定节次";
+            } else {
+                titleEl.textContent = "接下来没有排课";
+                metaEl.textContent = "第 " + realCurrentWeek + " 周 · 往后两周内没有需要到教室上的课";
+            }
+            bar.hidden = false;
+        }
+
         // 移动端"列表视图 / 网格视图"切换（记住上次选择）
         function setMobileViewMode(mode) {
             document.body.classList.toggle("mobile-grid-view", mode === "grid");
@@ -745,6 +974,14 @@
             let savedMode = "list";
             try { savedMode = localStorage.getItem("scheduleMobileViewMode") || "list"; } catch (e) {}
             setMobileViewMode(savedMode);
+
+            // 「下一节课」提示条：点一下跳到那门课所在的周
+            document.getElementById("nextClassBar").addEventListener("click", () => {
+                if (nextClassTargetWeek) goToWeek(nextClassTargetWeek);
+            });
+            renderNextClassBar();
+            // 倒计时会随时间走动，页面一直开着不刷新的话显示的分钟数就是错的，每分钟重算一次
+            setInterval(renderNextClassBar, 60000);
 
             // 起始周：地址栏 ?week= 优先（便于分享/收藏某一周），否则按今天定位到当前教学周
             goToWeek(getWeekFromUrl() || realCurrentWeek);
