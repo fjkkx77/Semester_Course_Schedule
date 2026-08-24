@@ -330,8 +330,10 @@
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
-            min-width: 800px;
         }
+        /* min-width 只给主课表——它有 7 个星期列，需要靠 .table-responsive 横向滚动。
+           千万别写成裸 table：页面上还有别的表格（作息表弹窗），会被一起撑爆。 */
+        #schedule-table { min-width: 800px; }
         th, td {
             border: 1px solid var(--border);
             padding: 12px;
@@ -560,8 +562,8 @@
         .modal-sub strong, .modal-note strong { color: var(--text-main); }
         .timesheet-table {
             width: 100%;
-            /* 全局 table 规则里有 min-width:800px（那是给 7 列的主课表配横向滚动用的），
-               弹窗这张 4 列小表必须显式复位，否则会把弹窗撑出横向滚动条、挤掉东教那一列 */
+            /* 双保险：主课表的 min-width 已经收敛到 #schedule-table 了，
+               这里再显式复位一次，防止以后又有人往全局 table 上加宽度 */
             min-width: 0;
             margin-top: 14px;
             border-collapse: collapse;
@@ -602,11 +604,66 @@
             font-size: 0.68rem;
             opacity: 0.85;
         }
+        /* 窄屏放不下 4 列并排（每列只剩 ~79px，时间串一挤就溢出），
+           改成"一个节次一块"的纵向布局：表头隐藏，每个格子自己用 data-label 当行内标签。
+           这样宽度再窄也只会往下长，不会横向溢出。 */
         @media (max-width: 480px) {
             .modal-card { padding: 16px; }
-            .timesheet-table { font-size: 0.74rem; }
-            .timesheet-table th, .timesheet-table td { padding: 7px 2px; }
-            .timesheet-table .is-break td { font-size: 0.7rem; }
+            .timesheet-table {
+                font-size: 0.82rem;
+                margin-top: 10px;
+            }
+            .timesheet-table,
+            .timesheet-table tbody,
+            .timesheet-table tr,
+            .timesheet-table td {
+                display: block;
+                width: auto;
+            }
+            .timesheet-table thead { display: none; }
+            .timesheet-table tr {
+                margin-top: 10px;
+                padding: 8px 12px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+            }
+            .timesheet-table td {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                gap: 12px;
+                padding: 4px 0;
+                border: 0;
+                text-align: right;
+                white-space: normal;
+            }
+            .timesheet-table td::before {
+                content: attr(data-label);
+                flex: 0 0 auto;
+                color: var(--text-light);
+                font-weight: 500;
+                text-align: left;
+            }
+            /* 节次名当这一块的小标题 */
+            .timesheet-table .slot-name {
+                display: block;
+                margin: 0 0 6px;
+                padding-bottom: 6px;
+                border-bottom: 1px solid var(--border);
+                text-align: left;
+                font-size: 0.88rem;
+            }
+            .timesheet-table .slot-name::before { content: none; }
+            /* 没有表头了，三教这一项改用左色条 + 底色标成基准 */
+            .timesheet-table .is-base {
+                margin: 2px -12px;
+                padding: 4px 12px 4px 9px;
+                border-left: 3px solid var(--primary);
+                background: var(--theory-card-bg);
+            }
+            .timesheet-table .is-break td { font-size: 0.78rem; }
+            .timesheet-table .is-break .slot-name { font-size: 0.82rem; }
+            .break-tag { margin-left: 4px; }
         }
         .course-info {
             color: var(--text-light);
@@ -731,9 +788,11 @@
             .container { padding: 12px; border-radius: 10px; }
             .header { flex-direction: column; align-items: stretch; }
             .header h1 { font-size: 1.2rem; }
-            /* 窄屏：[‹][下拉][›] 占一行，「回到本周」单独占满第二行方便点 */
+            /* 窄屏：[‹][下拉][›] 占一行，「回到本周」单独占满第二行方便点。
+               flex-basis 必须是 0 不能是 auto——auto 会拿 select 的内容宽度当基准，
+               而选项里最长的是"第 13 周 (网络应用与编程实训)"，一撑就把 [›] 挤到下一行去。 */
             .controls { width: 100%; flex-wrap: wrap; }
-            .week-selector { flex: 1 1 auto; width: auto; min-width: 0; }
+            .week-selector { flex: 1 1 0; width: auto; min-width: 0; }
             .week-now-btn { flex: 1 1 100%; }
             .mobile-view-toggle { display: flex; }
             /* 默认（列表模式）：显示按天分组列表，隐藏网格表格 */
@@ -748,8 +807,13 @@
             /* 每个星期列给够约140px（和电脑端单列宽度接近），文字按正常规则换行，
                不再强制单行省略——手机上长按/悬停基本看不到title提示，省略号会让
                老师名单看不全，所以改成"宽度够大+正常多行换行"来还原电脑端效果 */
-            body.mobile-grid-view table { min-width: 1050px; }
-            body.mobile-grid-view th, body.mobile-grid-view td { padding: 6px; }
+            /* 同样只限定主课表。之前这里写的是裸 table，
+               特异性(0,1,1)还高过 .timesheet-table(0,1,0)，
+               结果在网格视图下打开作息表弹窗，弹窗那张 4 列小表被撑到 1050px，
+               只剩「节次」一列看得见——真机上报出来的 bug 就是这个。 */
+            body.mobile-grid-view #schedule-table { min-width: 1050px; }
+            body.mobile-grid-view #schedule-table th,
+            body.mobile-grid-view #schedule-table td { padding: 6px; }
             body.mobile-grid-view .time-col { width: 74px; padding: 8px 4px; font-size: 0.78rem; }
             body.mobile-grid-view .course-card { font-size: 0.78rem; padding: 8px 6px; }
             body.mobile-grid-view .course-info { font-size: 0.72rem; }
@@ -891,7 +955,7 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>
-                <p class="modal-sub">同一个节次在不同教学楼的起止时间不一样，尤其上午 3-4 节差了 20 分钟。<strong>三教这一列就是左侧节次列的基准。</strong></p>
+                <p class="modal-sub">同一个节次在不同教学楼的起止时间不一样，尤其上午 3-4 节差了 20 分钟。<strong>标出来的「三教」就是左侧节次列的基准。</strong></p>
                 <table class="timesheet-table">
                     <thead>
                         <tr>
@@ -904,45 +968,45 @@
                     <tbody>
                         <tr>
                             <td class="slot-name">1-2节</td>
-                            <td>08:00-09:40</td>
-                            <td class="is-base">08:00-09:40</td>
-                            <td>08:00-09:30</td>
+                            <td data-label="一/二教">08:00-09:40</td>
+                            <td data-label="三教" class="is-base">08:00-09:40</td>
+                            <td data-label="东教">08:00-09:30</td>
                         </tr>
                         <tr class="is-break">
                             <td class="slot-name">课间</td>
-                            <td>09:40-10:00</td>
-                            <td class="is-base">09:40-10:20<br><span class="break-tag">大课间</span></td>
-                            <td>09:30-10:20</td>
+                            <td data-label="一/二教">09:40-10:00</td>
+                            <td data-label="三教" class="is-base">09:40-10:20<br><span class="break-tag">大课间</span></td>
+                            <td data-label="东教">09:30-10:20</td>
                         </tr>
                         <tr>
                             <td class="slot-name">3-4节</td>
-                            <td>10:00-11:40</td>
-                            <td class="is-base">10:20-12:00</td>
-                            <td>10:20-11:50</td>
+                            <td data-label="一/二教">10:00-11:40</td>
+                            <td data-label="三教" class="is-base">10:20-12:00</td>
+                            <td data-label="东教">10:20-11:50</td>
                         </tr>
                         <tr class="is-break">
                             <td class="slot-name">午休</td>
-                            <td>11:40-14:00</td>
-                            <td class="is-base">12:00-14:00</td>
-                            <td>11:50-14:00</td>
+                            <td data-label="一/二教">11:40-14:00</td>
+                            <td data-label="三教" class="is-base">12:00-14:00</td>
+                            <td data-label="东教">11:50-14:00</td>
                         </tr>
                         <tr>
                             <td class="slot-name">5-6节</td>
-                            <td>14:00-15:35</td>
-                            <td class="is-base">14:00-15:35</td>
-                            <td>14:00-15:30</td>
+                            <td data-label="一/二教">14:00-15:35</td>
+                            <td data-label="三教" class="is-base">14:00-15:35</td>
+                            <td data-label="东教">14:00-15:30</td>
                         </tr>
                         <tr>
                             <td class="slot-name">7-8节</td>
-                            <td>15:55-17:30</td>
-                            <td class="is-base">15:55-17:30</td>
-                            <td>16:00-17:30</td>
+                            <td data-label="一/二教">15:55-17:30</td>
+                            <td data-label="三教" class="is-base">15:55-17:30</td>
+                            <td data-label="东教">16:00-17:30</td>
                         </tr>
                         <tr>
                             <td class="slot-name">9-10节</td>
-                            <td>18:00-19:40</td>
-                            <td class="is-base">18:00-19:40</td>
-                            <td>18:00-19:40</td>
+                            <td data-label="一/二教">18:00-19:40</td>
+                            <td data-label="三教" class="is-base">18:00-19:40</td>
+                            <td data-label="东教">18:00-19:40</td>
                         </tr>
                     </tbody>
                 </table>
