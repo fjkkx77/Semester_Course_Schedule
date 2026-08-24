@@ -1186,7 +1186,8 @@
         // 从今天此刻往后找第一门还没结束的课，最多找 14 天（够跨过实训周里的空档）
         function findUpcomingClass() {
             const now = new Date();
-            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            // 精确到秒。用分钟判断的话，"刚好这一分钟内下课"会提前/滞后一整分钟才切状态
+            const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 
             for (let offset = 0; offset <= 14; offset++) {
                 const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
@@ -1202,14 +1203,14 @@
 
                 for (const item of todays) {
                     // 今天的课要看是否已经下课；以后的日子直接取当天第一节
-                    if (offset > 0 || nowMinutes < item.range.end) {
+                    if (offset > 0 || nowSec < item.range.end * 60) {
                         return {
                             course: item.course,
                             range: item.range,
                             week: week,
                             dayIndex: dayIndex,
                             offset: offset,
-                            ongoing: offset === 0 && nowMinutes >= item.range.start
+                            ongoing: offset === 0 && nowSec >= item.range.start * 60
                         };
                     }
                 }
@@ -1239,12 +1240,17 @@
             return list.slice().sort((a, b) => (a.weekEnd - a.weekStart) - (b.weekEnd - b.weekStart))[0];
         }
 
-        function humanizeGap(minutes) {
-            if (minutes <= 0) return "即将开始";
-            if (minutes < 60) return "还有 " + minutes + " 分钟";
-            const h = Math.floor(minutes / 60);
-            const m = minutes % 60;
-            return m === 0 ? ("还有 " + h + " 小时") : ("还有 " + h + " 小时 " + m + " 分钟");
+        // 传入剩余秒数，输出"还有 X 小时 Y 分 Z 秒"。
+        // 秒是一直在跳的，所以只要还有秒就always写出来，不做"整分钟时省略秒"那种优化——
+        // 否则会出现 59 秒→"1 分钟"→58 秒 这种看起来像倒着走的跳变。
+        function humanizeGap(totalSeconds) {
+            if (totalSeconds <= 0) return "即将开始";
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const sec = totalSeconds % 60;
+            if (h > 0) return "还有 " + h + " 小时 " + m + " 分 " + sec + " 秒";
+            if (m > 0) return "还有 " + m + " 分 " + sec + " 秒";
+            return "还有 " + sec + " 秒";
         }
 
         function offsetLabel(offset, week, dayIndex) {
@@ -1257,6 +1263,15 @@
         const ICON_BELL = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>';
         const ICON_PLAY = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
         const ICON_COFFEE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4Z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>';
+
+        // 提示条现在每秒重绘一次，图标要是每次都重设 innerHTML，
+        // 等于每秒把 SVG 拆了重建一遍，纯浪费；内容没变就不动它。
+        function setIcon(el, svg) {
+            if (el.dataset.icon !== svg) {
+                el.innerHTML = svg;
+                el.dataset.icon = svg;
+            }
+        }
 
         // 提示条点击的目标：跳到哪一周 + 定位到哪一门课。
         // 只记周次是不够的——下一节课绝大多数时候就在正在看的这一周，
@@ -1284,21 +1299,21 @@
             if (upcoming) {
                 const c = upcoming.course;
                 const now = new Date();
-                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
                 const place = (c.building ? c.building + " " : "") + c.room;
 
                 if (upcoming.ongoing) {
                     bar.classList.add("is-ongoing");
-                    iconEl.innerHTML = ICON_PLAY;
+                    setIcon(iconEl, ICON_PLAY);
                     titleEl.textContent = "正在上课 · " + c.name;
-                    metaEl.textContent = place + " · " + c.teacher + " · " + c.realTime.split("-")[1] + " 下课（" + humanizeGap(upcoming.range.end - nowMinutes) + "）";
+                    metaEl.textContent = place + " · " + c.teacher + " · " + c.realTime.split("-")[1] + " 下课（" + humanizeGap(upcoming.range.end * 60 - nowSec) + "）";
                 } else {
                     bar.classList.remove("is-ongoing");
-                    iconEl.innerHTML = ICON_BELL;
+                    setIcon(iconEl, ICON_BELL);
                     titleEl.textContent = "下一节 · " + c.name;
                     // 只有"今天"的课报倒计时，跨天了报具体是哪天更有用
                     const timing = upcoming.offset === 0
-                        ? (c.realTime.split("-")[0] + " 开始（" + humanizeGap(upcoming.range.start - nowMinutes) + "）")
+                        ? (c.realTime.split("-")[0] + " 开始（" + humanizeGap(upcoming.range.start * 60 - nowSec) + "）")
                         : (offsetLabel(upcoming.offset, upcoming.week, upcoming.dayIndex) + " " + c.realTime);
                     metaEl.textContent = timing + " · " + place + " · " + c.teacher;
                 }
@@ -1313,7 +1328,7 @@
             // 没有理论课了，看看当前这周是不是在实训
             const practical = findPracticalOfWeek(realCurrentWeek);
             bar.classList.remove("is-ongoing");
-            iconEl.innerHTML = ICON_COFFEE;
+            setIcon(iconEl, ICON_COFFEE);
             arrowEl.hidden = false;
             nextClassTargetWeek = realCurrentWeek;
             nextClassTargetIdx = practical ? courses.indexOf(practical) : null;
@@ -1439,8 +1454,10 @@
                 highlightCourseCard(nextClassTargetIdx);
             });
             renderNextClassBar();
-            // 倒计时会随时间走动，页面一直开着不刷新的话显示的分钟数就是错的，每分钟重算一次
-            setInterval(renderNextClassBar, 60000);
+            // 倒计时精确到秒，必须每秒重算——每分钟一次的话秒数就是停着的。
+            // 数据量很小（十几条课 × 最多 14 天），每秒跑一次开销可以忽略；
+            // 页面切到后台时浏览器本来就会节流 setInterval，不用自己再判断可见性。
+            setInterval(renderNextClassBar, 1000);
 
             // 起始周：地址栏 ?week= 优先（便于分享/收藏某一周），否则按今天定位到当前教学周
             goToWeek(getWeekFromUrl() || realCurrentWeek);
