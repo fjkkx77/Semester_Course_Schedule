@@ -1600,7 +1600,17 @@
             select.addEventListener("change", (e) => goToWeek(e.target.value));
             document.getElementById("btn-prev-week").addEventListener("click", () => goToWeek(parseInt(select.value, 10) - 1));
             document.getElementById("btn-next-week").addEventListener("click", () => goToWeek(parseInt(select.value, 10) + 1));
-            document.getElementById("btn-current-week").addEventListener("click", () => goToWeek(realCurrentWeek));
+            // 「回到本周」不只是翻回本周，还把今天那一列点亮——
+            // iOS 原生日期选择器里没有"今天"快捷键（只能给个"还原"），
+            // 想快速回到今天就靠这个按钮，所以它得把"今天在哪"也指出来。
+            document.getElementById("btn-current-week").addEventListener("click", () => {
+                goToWeek(realCurrentWeek);
+                if (semesterActive) {
+                    highlightDay(todayDayIndex);
+                    // 日期框也跟着回到今天，保持三处（周次/表格/日期框）说的是同一天
+                    document.getElementById("date-jump").value = toDateInputValue(new Date());
+                }
+            });
 
             document.querySelectorAll(".mobile-view-toggle .toggle-btn").forEach(btn => {
                 btn.addEventListener("click", () => setMobileViewMode(btn.dataset.mode));
@@ -1613,6 +1623,12 @@
             const dateInput = document.getElementById("date-jump");
             dateInput.min = toDateInputValue(SEMESTER_START_DATE);
             dateInput.max = toDateInputValue(semesterLastDate());
+            // 必须给个初始值。input[type=date] 空值时 iOS 上是完全空白的
+            // （不像桌面 Chrome 会显示"年/月/日"占位符），整个框看起来就是个孤零零的图标，
+            // 没人看得出这是干什么用的。默认填今天，学期外就填开学第一天。
+            dateInput.value = semesterActive
+                ? toDateInputValue(new Date())
+                : toDateInputValue(SEMESTER_START_DATE);
             dateInput.addEventListener("change", (e) => jumpToDate(e.target.value));
 
             // 作息表弹窗：按钮打开，关闭按钮 / 点遮罩 / Esc 三种方式关闭
