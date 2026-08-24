@@ -44,6 +44,10 @@
             /* 今日高亮：表头稍重、数据格极淡，避免整列抢过课程卡片 */
             --today-head-bg: #E0E7FF;
             --today-cell-bg: rgba(79, 70, 229, 0.045);
+            --next-bar-hover-bg: #E0E7FF;
+            --next-bar-ongoing-hover-bg: #D7F5E8;
+            --flash-ring: rgba(79, 70, 229, 0.9);
+            --flash-glow: rgba(79, 70, 229, 0.5);
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -78,6 +82,10 @@
                 --slot-time-text: #AEB9C7;
                 --today-head-bg: #29325A;
                 --today-cell-bg: rgba(129, 140, 248, 0.09);
+                --next-bar-hover-bg: rgba(129, 140, 248, 0.20);
+                --next-bar-ongoing-hover-bg: rgba(52, 211, 153, 0.20);
+                --flash-ring: rgba(129, 140, 248, 0.95);
+                --flash-glow: rgba(129, 140, 248, 0.45);
             }
         }
         html { -webkit-text-size-adjust: 100%; }
@@ -265,8 +273,55 @@
         }
         .next-class-arrow[hidden] { display: none; }
         @media (hover: hover) {
-            .next-class-bar:hover { border-color: var(--primary); }
-            .next-class-bar.is-ongoing:hover { border-color: var(--practical-accent); }
+            /* 原来只有边框换色，在这种浅底上几乎看不出来，加深底色并让箭头往右挪一点，
+               让"这条是能点的"这件事有明显的视觉暗示 */
+            .next-class-bar:hover {
+                border-color: var(--primary);
+                background: var(--next-bar-hover-bg);
+            }
+            .next-class-bar.is-ongoing:hover {
+                border-color: var(--practical-accent);
+                background: var(--next-bar-ongoing-hover-bg);
+            }
+            .next-class-bar:hover .next-class-arrow {
+                color: var(--primary);
+                transform: translateX(3px);
+            }
+            .next-class-bar.is-ongoing:hover .next-class-arrow { color: var(--practical-accent); }
+        }
+        .next-class-bar:active { transform: scale(0.995); }
+        .next-class-arrow { transition: transform 0.15s ease, color 0.15s ease; }
+
+        /* 点提示条后，被指到的那张课程卡片闪一下，明确"就是这节课"。
+           光描一圈细边在这种浅底卡片上根本看不出来（旁边全是同色系卡片），
+           所以是「描边 + 外投影 + 轻微放大」三样一起上，闪两下再收。 */
+        @keyframes course-flash {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+                transform: scale(1);
+            }
+            20%, 55% {
+                box-shadow: 0 0 0 3px var(--flash-ring), 0 8px 20px -6px var(--flash-glow);
+                transform: scale(1.035);
+            }
+            38% {
+                box-shadow: 0 0 0 1px var(--flash-ring), 0 4px 10px -6px var(--flash-glow);
+                transform: scale(1.01);
+            }
+        }
+        .course-flash {
+            animation: course-flash 1.6s ease-in-out;
+            /* 抬高层级，否则放大的部分会被相邻单元格的卡片盖住 */
+            position: relative;
+            z-index: 3;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            /* 不做动画的话就静态描一圈，反馈不能没有 */
+            .course-flash {
+                animation: none;
+                box-shadow: 0 0 0 3px var(--flash-ring), 0 8px 20px -6px var(--flash-glow);
+            }
+            .next-class-arrow { transition: none; }
         }
         .table-responsive {
             overflow-x: auto;
@@ -1135,8 +1190,11 @@
         const ICON_PLAY = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
         const ICON_COFFEE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4Z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>';
 
-        // 提示条要跳转到的周次（点一下直接翻过去）
+        // 提示条点击的目标：跳到哪一周 + 定位到哪一门课。
+        // 只记周次是不够的——下一节课绝大多数时候就在正在看的这一周，
+        // 那样点下去页面毫无变化，交互看起来像是坏的。
         let nextClassTargetWeek = null;
+        let nextClassTargetIdx = null;
 
         function renderNextClassBar() {
             const bar = document.getElementById("nextClassBar");
@@ -1149,6 +1207,7 @@
             if (!semesterActive) {
                 bar.hidden = true;
                 nextClassTargetWeek = null;
+                nextClassTargetIdx = null;
                 return;
             }
 
@@ -1177,6 +1236,7 @@
                 }
 
                 nextClassTargetWeek = upcoming.week;
+                nextClassTargetIdx = courses.indexOf(c);
                 arrowEl.hidden = false;
                 bar.hidden = false;
                 return;
@@ -1188,6 +1248,7 @@
             iconEl.innerHTML = ICON_COFFEE;
             arrowEl.hidden = false;
             nextClassTargetWeek = realCurrentWeek;
+            nextClassTargetIdx = practical ? courses.indexOf(practical) : null;
 
             if (practical) {
                 titleEl.textContent = "本周 · " + practical.name;
@@ -1197,6 +1258,28 @@
                 metaEl.textContent = "第 " + realCurrentWeek + " 周 · 往后两周内没有需要到教室上的课";
             }
             bar.hidden = false;
+        }
+
+        // 把某门课的卡片滚进视野并短暂高亮。
+        // 桌面表格和移动列表两套 DOM 平时都在，得挑当前真正显示的那一份
+        // （offsetParent 为 null 说明它或它的祖先是 display:none）。
+        function highlightCourseCard(courseIdx) {
+            if (courseIdx === null || courseIdx === undefined) return;
+            const candidates = document.querySelectorAll(`[data-course-idx="${courseIdx}"]`);
+            let target = null;
+            for (const el of candidates) {
+                if (el.offsetParent !== null) { target = el; break; }
+            }
+            if (!target) return;
+
+            const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center", inline: "center" });
+
+            // 重新触发动画：先摘掉再强制回流，否则连点两次第二次不会闪
+            target.classList.remove("course-flash");
+            void target.offsetWidth;
+            target.classList.add("course-flash");
+            setTimeout(() => target.classList.remove("course-flash"), 1600);
         }
 
         // 移动端"列表视图 / 网格视图"切换（记住上次选择）
@@ -1280,9 +1363,12 @@
                 if (e.key === "Escape" && !timesheetModal.hidden) closeTimesheet();
             });
 
-            // 「下一节课」提示条：点一下跳到那门课所在的周
+            // 「下一节课」提示条：跳到那一周，并把那门课滚进视野里闪一下。
+            // 光跳周不够——下一节课多半就在当前这一周，那样点了等于没反应。
             document.getElementById("nextClassBar").addEventListener("click", () => {
-                if (nextClassTargetWeek) goToWeek(nextClassTargetWeek);
+                if (!nextClassTargetWeek) return;
+                goToWeek(nextClassTargetWeek);
+                highlightCourseCard(nextClassTargetIdx);
             });
             renderNextClassBar();
             // 倒计时会随时间走动，页面一直开着不刷新的话显示的分钟数就是错的，每分钟重算一次
@@ -1358,6 +1444,8 @@
                     cellCourses.forEach(c => {
                         const div = document.createElement("div");
                         div.className = "course-card" + (c.type === "practical" ? " practical" : "");
+                        // 用 courses 里的下标当锚点，「下一节课」提示条靠它把卡片找回来
+                        div.dataset.courseIdx = courses.indexOf(c);
                         div.innerHTML = `
                             <div class="course-name" title="${c.name}">${c.name}</div>
                             ${c.realTime ? `<div class="course-time">⏱ ${c.realTime}</div>` : ""}
@@ -1434,6 +1522,7 @@
                         const meta = periodMeta[c.time];
                         const card = document.createElement("div");
                         card.className = "mobile-course-card" + (c.type === "practical" ? " practical" : "");
+                        card.dataset.courseIdx = courses.indexOf(c);
                         card.innerHTML = `
                             <div class="mobile-course-time">${meta.label} · ${c.realTime || meta.time}</div>
                             <div class="mobile-course-name">${c.name}</div>
