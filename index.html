@@ -41,6 +41,9 @@
             --segment-evening-text: #5B21B6;
             --segment-evening-accent: #8B5CF6;
             --slot-time-text: #4B5563;
+            /* 今日高亮：表头稍重、数据格极淡，避免整列抢过课程卡片 */
+            --today-head-bg: #E0E7FF;
+            --today-cell-bg: rgba(79, 70, 229, 0.045);
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -73,6 +76,8 @@
                 --segment-evening-text: #C4B5FD;
                 --segment-evening-accent: #A78BFA;
                 --slot-time-text: #AEB9C7;
+                --today-head-bg: #29325A;
+                --today-cell-bg: rgba(129, 140, 248, 0.09);
             }
         }
         html { -webkit-text-size-adjust: 100%; }
@@ -130,6 +135,80 @@
         .week-selector:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+        }
+        /* 周次导航：左右箭头 + 回到本周。尺寸都按 44px 触摸目标来 */
+        .week-nav-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            min-height: 44px;
+            flex: 0 0 auto;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--select-bg);
+            color: var(--text-main);
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .week-nav-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+        .week-now-btn {
+            min-height: 44px;
+            flex: 0 0 auto;
+            padding: 8px 14px;
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            touch-action: manipulation;
+            white-space: nowrap;
+        }
+        /* 当前已经停在本周时，按钮降级成"无事可做"的次要态 */
+        .week-now-btn.is-current {
+            background: var(--select-bg);
+            color: var(--text-light);
+            border-color: var(--border);
+        }
+        @media (hover: hover) {
+            .week-nav-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+            .week-now-btn:hover { filter: brightness(1.08); }
+        }
+        /* ===== 今日高亮 ===== */
+        thead th.today-col {
+            background: var(--today-head-bg);
+            color: var(--primary);
+        }
+        td.today-col { background: var(--today-cell-bg); }
+        /* 表头「今日」小徽标；用 block 独占一行，避免和星期名挤在一起 */
+        .today-badge {
+            display: block;
+            width: fit-content;
+            margin: 4px auto 0;
+            padding: 1px 7px;
+            border-radius: 999px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        /* 移动端按天分组卡片：今日那一天整块描边 + 标徽标 */
+        .day-block.is-today {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+        .day-block.is-today .day-block-header { color: var(--primary); }
+        .day-block-header .today-badge {
+            display: inline-block;
+            margin: 0 0 0 8px;
         }
         .table-responsive {
             overflow-x: auto;
@@ -398,8 +477,10 @@
             .container { padding: 12px; border-radius: 10px; }
             .header { flex-direction: column; align-items: stretch; }
             .header h1 { font-size: 1.2rem; }
-            .controls { width: 100%; }
-            .week-selector { width: 100%; }
+            /* 窄屏：[‹][下拉][›] 占一行，「回到本周」单独占满第二行方便点 */
+            .controls { width: 100%; flex-wrap: wrap; }
+            .week-selector { flex: 1 1 auto; width: auto; min-width: 0; }
+            .week-now-btn { flex: 1 1 100%; }
             .mobile-view-toggle { display: flex; }
             /* 默认（列表模式）：显示按天分组列表，隐藏网格表格 */
             .desktop-view { display: none; }
@@ -431,7 +512,14 @@
         <div class="header">
             <h1>📅 2026-2027第一学期课程排表系统</h1>
             <div class="controls">
+                <button type="button" class="week-nav-btn" id="btn-prev-week" title="上一周" aria-label="上一周">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
                 <select id="week-select" class="week-selector"></select>
+                <button type="button" class="week-nav-btn" id="btn-next-week" title="下一周" aria-label="下一周">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+                <button type="button" class="week-now-btn" id="btn-current-week">回到本周</button>
             </div>
         </div>
         <div class="mobile-view-toggle" id="mobileViewToggle">
@@ -544,6 +632,68 @@
 
         const days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 
+        // =================== 学期时间基准 ===================
+        // 开学第一周的周一（用户 2026-08-24 确认）。换学期只需要改这一个常量，
+        // 周次、"本周"定位、今日高亮全部跟着重算，不要在别处再写死日期。
+        const SEMESTER_START_DATE = new Date(2026, 7, 24); // 月份从 0 开始，7 = 8月
+        const TOTAL_WEEKS = 18;
+
+        // 按真实日期算出今天是第几教学周
+        function getRealCurrentWeek() {
+            const now = new Date();
+            // 两边都归零到"本地当天 00:00"，避免时分秒和时区把天数差算歪
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const start = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
+            const diffDays = Math.floor((today - start) / 86400000);
+            const week = Math.floor(diffDays / 7) + 1;
+            // 边界：开学前当第 1 周，学期结束后停在最后一周
+            if (week < 1) return 1;
+            if (week > TOTAL_WEEKS) return TOTAL_WEEKS;
+            return week;
+        }
+
+        // 学期是否还在进行中（开学前/放假后都算不在）——决定要不要显示"今日""下一节课"
+        function isWithinSemester() {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const start = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
+            const diffDays = Math.floor((today - start) / 86400000);
+            return diffDays >= 0 && diffDays < TOTAL_WEEKS * 7;
+        }
+
+        // getDay() 是 0(周日)~6(周六)，本页用 1(周一)~7(周日)，周日必须映射成 7，
+        // 否则周日打开页面时"今日"高亮会落在空处
+        function getTodayDayIndex() {
+            const raw = new Date().getDay();
+            return raw === 0 ? 7 : raw;
+        }
+
+        const todayDayIndex = getTodayDayIndex();
+        const realCurrentWeek = getRealCurrentWeek();
+        const semesterActive = isWithinSemester();
+
+        // 只有"学期进行中"且正在看的就是本周时，才在表格里标今日
+        function shouldMarkToday(week) {
+            return semesterActive && week === realCurrentWeek;
+        }
+
+        // =================== URL 上的 ?week= ===================
+        function getWeekFromUrl() {
+            const raw = new URLSearchParams(location.search).get("week");
+            const n = parseInt(raw, 10);
+            if (!Number.isFinite(n) || n < 1 || n > TOTAL_WEEKS) return null;
+            return n;
+        }
+
+        // 把当前周次同步回地址栏，方便收藏/分享某一周；用 replaceState 不污染后退历史
+        function syncWeekToUrl(week) {
+            try {
+                const url = new URL(location.href);
+                url.searchParams.set("week", week);
+                history.replaceState(null, "", url);
+            } catch (e) {}
+        }
+
         // 移动端"列表视图 / 网格视图"切换（记住上次选择）
         function setMobileViewMode(mode) {
             document.body.classList.toggle("mobile-grid-view", mode === "grid");
@@ -553,19 +703,41 @@
             try { localStorage.setItem("scheduleMobileViewMode", mode); } catch (e) {}
         }
 
+        // 切换周次的唯一入口：下拉、左右箭头、"回到本周"都走这里，
+        // 保证下拉值 / 表格 / 地址栏 / 按钮状态四者永远一致
+        function goToWeek(week) {
+            const w = Math.min(TOTAL_WEEKS, Math.max(1, parseInt(week, 10) || 1));
+            document.getElementById("week-select").value = w;
+            renderSchedule(w);
+            syncWeekToUrl(w);
+            updateWeekControls(w);
+        }
+
+        // 到头的箭头置灰；已经停在本周时"回到本周"降级成次要态
+        function updateWeekControls(week) {
+            document.getElementById("btn-prev-week").disabled = (week <= 1);
+            document.getElementById("btn-next-week").disabled = (week >= TOTAL_WEEKS);
+            const nowBtn = document.getElementById("btn-current-week");
+            nowBtn.classList.toggle("is-current", week === realCurrentWeek);
+            nowBtn.title = semesterActive
+                ? `本周是第 ${realCurrentWeek} 周`
+                : `学期未开始或已结束，按开学日推算为第 ${realCurrentWeek} 周`;
+        }
+
         // 初始化
         function init() {
             const select = document.getElementById("week-select");
-            for (let i = 1; i <= 18; i++) {
+            for (let i = 1; i <= TOTAL_WEEKS; i++) {
                 const option = document.createElement("option");
                 option.value = i;
                 option.text = `第 ${i} 周 ${i <= 8 ? "(理论教学)" : "(实训设计)"}`;
                 select.appendChild(option);
             }
 
-            select.addEventListener("change", (e) => {
-                renderSchedule(parseInt(e.target.value));
-            });
+            select.addEventListener("change", (e) => goToWeek(e.target.value));
+            document.getElementById("btn-prev-week").addEventListener("click", () => goToWeek(parseInt(select.value, 10) - 1));
+            document.getElementById("btn-next-week").addEventListener("click", () => goToWeek(parseInt(select.value, 10) + 1));
+            document.getElementById("btn-current-week").addEventListener("click", () => goToWeek(realCurrentWeek));
 
             document.querySelectorAll(".mobile-view-toggle .toggle-btn").forEach(btn => {
                 btn.addEventListener("click", () => setMobileViewMode(btn.dataset.mode));
@@ -574,8 +746,28 @@
             try { savedMode = localStorage.getItem("scheduleMobileViewMode") || "list"; } catch (e) {}
             setMobileViewMode(savedMode);
 
-            // 默认渲染第1周
-            renderSchedule(1);
+            // 起始周：地址栏 ?week= 优先（便于分享/收藏某一周），否则按今天定位到当前教学周
+            goToWeek(getWeekFromUrl() || realCurrentWeek);
+        }
+
+        // 表头的"今日"标记：只有正在看本周时才标，翻到别的周就撤掉
+        function updateTodayHeader(week) {
+            const mark = shouldMarkToday(week);
+            document.querySelectorAll("#schedule-table thead th").forEach((th, i) => {
+                // i=0 是"节次/时间"表头，星期一~日对应 i=1..7
+                if (i === 0) return;
+                const isToday = mark && i === todayDayIndex;
+                th.classList.toggle("today-col", isToday);
+                const existing = th.querySelector(".today-badge");
+                if (isToday && !existing) {
+                    const badge = document.createElement("span");
+                    badge.className = "today-badge";
+                    badge.textContent = "今日";
+                    th.appendChild(badge);
+                } else if (!isToday && existing) {
+                    existing.remove();
+                }
+            });
         }
 
         // 渲染核心逻辑
@@ -583,7 +775,10 @@
             const tbody = document.getElementById("schedule-body");
             const table = document.getElementById("schedule-table");
             const emptyState = document.getElementById("empty-state");
-            
+
+            updateTodayHeader(week);
+            const markToday = shouldMarkToday(week);
+
             tbody.innerHTML = "";
             let totalCoursesThisWeek = 0;
             
@@ -600,6 +795,7 @@
                 for (let dayIndex = 1; dayIndex <= 7; dayIndex++) {
                     const td = document.createElement("td");
                     td.setAttribute("data-label", days[dayIndex-1]);
+                    if (markToday && dayIndex === todayDayIndex) td.classList.add("today-col");
                     
                     // 筛选本周、本星期、当前时间槽的课程
                     const cellCourses = courses.filter(c => {
@@ -671,12 +867,14 @@
                     return isWeekMatch && isDayMatch;
                 }).sort((a, b) => periodMeta[a.time].order - periodMeta[b.time].order);
 
+                const isToday = shouldMarkToday(week) && dayIndex === todayDayIndex;
+
                 const block = document.createElement("div");
-                block.className = "day-block";
+                block.className = "day-block" + (isToday ? " is-today" : "");
 
                 const header = document.createElement("div");
                 header.className = "day-block-header";
-                header.innerHTML = `<span>${days[dayIndex - 1]}</span><span class="count">${dayCourses.length > 0 ? dayCourses.length + " 项" : ""}</span>`;
+                header.innerHTML = `<span>${days[dayIndex - 1]}${isToday ? '<span class="today-badge">今日</span>' : ""}</span><span class="count">${dayCourses.length > 0 ? dayCourses.length + " 项" : ""}</span>`;
                 block.appendChild(header);
 
                 const body = document.createElement("div");
