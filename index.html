@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>2025-2026第二学期课表查询</title>
+    <title>2026-2027学年第一学期课表查询</title>
     <style>
         :root {
             --primary: #4F46E5;
@@ -200,6 +200,36 @@
         .practical .course-name {
             color: var(--practical-name);
         }
+        /* 课程卡片上的"实际上课时间"：各教学楼作息不同（二教10:00起、三教/东教10:20起），
+           同一个"3-4节"起止时间可能不一样，所以以卡片上这行时间为准，不要只看左侧节次列 */
+        .course-time {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+            letter-spacing: 0.2px;
+        }
+        .practical .course-time { color: var(--practical-accent); }
+        .course-time-note,
+        .mobile-course-time-note {
+            font-size: 0.72rem;
+            color: var(--text-light);
+            line-height: 1.35;
+            margin-bottom: 4px;
+        }
+        /* 表格下方的作息说明 */
+        .time-footnote {
+            margin-top: 16px;
+            padding: 12px 14px;
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+            background: var(--th-bg);
+            color: var(--text-light);
+            font-size: 0.82rem;
+            line-height: 1.7;
+        }
+        .time-footnote strong { color: var(--text-main); }
+        .time-footnote ul { margin: 6px 0 0; padding-left: 1.2em; }
         .course-info {
             color: var(--text-light);
             font-size: 0.85rem;
@@ -350,7 +380,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📅 第二学期课程排表系统</h1>
+            <h1>📅 2026-2027第一学期课程排表系统</h1>
             <div class="controls">
                 <select id="week-select" class="week-selector"></select>
             </div>
@@ -384,35 +414,51 @@
 
         <!-- 移动端：按"星期一→星期日"顺序分组展示，每天内部再按节次时间排序，避免手机上按节次分块导致同一天的课被拆散到多处 -->
         <div class="mobile-view" id="mobileView"></div>
+
+        <!-- 各教学楼作息差异说明：同一节次在不同教学楼的起止时间不同，卡片上的时间才是实际时间 -->
+        <div class="time-footnote">
+            <strong>⏱ 关于上课时间</strong>：左侧节次列给的是跨教学楼的大致区间，<strong>每张课程卡片上的时间才是这门课的实际起止时间</strong>。各教学楼作息差异：
+            <ul>
+                <li><strong>第二教学楼（卡片上写"二教"）</strong>：3-4 节 10:00-11:40</li>
+                <li><strong>第三教学楼（卡片上写"三教"）</strong>：3-4 节 10:20-12:00（大课间休息 40 分钟）</li>
+                <li><strong>东教学楼（卡片上写"东教"）</strong>：3-4 节 10:20-11:50；且 1-2 节、3-4 节两小节之间<strong>无 10 分钟课间</strong>，所以 1-2 节 09:30 就下课</li>
+            </ul>
+        </div>
     </div>
 
     <script>
         // 课表核心数据
+        // realTime = 该门课的实际上课起止时间。沈阳工业大学辽阳分校各教学楼作息不同，
+        // 同为"3-4节"，二教 10:00-11:40、三教 10:20-12:00、东教 10:20-11:50，
+        // 东教 1-2 节与 3-4 节两小节之间无 10 分钟课间，所以下课更早。
+        // 因此时间不能只看左侧节次列，必须以每张课程卡片上的 realTime 为准。
         const courses = [
             // ================= 星期一 =================
-            { name: "计算机图形学(L)", teacher: "丁革媛", room: "3-A101", weekStart: 1, weekEnd: 6, day: 1, time: "3-4", type: "theory" },
-            { name: "计算机图形学(L)", teacher: "丁革媛", room: "东208-1", weekStart: 7, weekEnd: 8, day: 1, time: "3-4", type: "theory" },
-            
+            { name: "计算机图形学(L)", teacher: "丁革媛", room: "3-A101", building: "三教", realTime: "10:20-12:00", weekStart: 1, weekEnd: 6, day: 1, time: "3-4", type: "theory" },
+            { name: "计算机图形学(L)", teacher: "丁革媛", room: "东208-1", building: "东教", realTime: "10:20-11:50", timeNote: "东教两小节间无课间，下课提前", weekStart: 7, weekEnd: 8, day: 1, time: "3-4", type: "theory" },
+
             // ================= 星期二 =================
-            { name: "人工智能基础(L)", teacher: "赵腾飞", room: "2-313", weekStart: 1, weekEnd: 8, day: 2, time: "3-4", type: "theory" },
-            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-213", weekStart: 1, weekEnd: 6, day: 2, time: "5-6", type: "theory" },
-            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-501", weekStart: 7, weekEnd: 8, day: 2, time: "5-6", type: "theory" },
-            
+            { name: "人工智能基础(L)", teacher: "赵腾飞", room: "2-313", building: "二教", realTime: "10:00-11:40", weekStart: 1, weekEnd: 8, day: 2, time: "3-4", type: "theory" },
+            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-213", building: "二教", realTime: "14:00-15:35", weekStart: 1, weekEnd: 6, day: 2, time: "5-6", type: "theory" },
+            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-501", building: "二教", realTime: "14:00-15:35", weekStart: 7, weekEnd: 8, day: 2, time: "5-6", type: "theory" },
+
             // ================= 星期三 =================
-            { name: "计算机图形学(L)", teacher: "丁革媛", room: "3-A101", weekStart: 1, weekEnd: 6, day: 3, time: "1-2", type: "theory" },
-            { name: "计算机图形学(L)", teacher: "丁革媛", room: "东208-1", weekStart: 7, weekEnd: 8, day: 3, time: "1-2", type: "theory" },
-            { name: "中国共产党党史(L)", teacher: "任少执", room: "3-B501", weekStart: 1, weekEnd: 8, day: 3, time: "3-4", type: "theory" },
-            
+            { name: "计算机图形学(L)", teacher: "丁革媛", room: "3-A101", building: "三教", realTime: "08:00-09:40", weekStart: 1, weekEnd: 6, day: 3, time: "1-2", type: "theory" },
+            { name: "计算机图形学(L)", teacher: "丁革媛", room: "东208-1", building: "东教", realTime: "08:00-09:30", timeNote: "东教两小节间无课间，下课提前", weekStart: 7, weekEnd: 8, day: 3, time: "1-2", type: "theory" },
+            { name: "中国共产党历史(L)", teacher: "任少执", room: "3-B501", building: "三教", realTime: "10:20-12:00", weekStart: 1, weekEnd: 8, day: 3, time: "3-4", type: "theory" },
+
             // ================= 星期四 =================
-            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-213", weekStart: 1, weekEnd: 6, day: 4, time: "1-2", type: "theory" },
-            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-501", weekStart: 7, weekEnd: 8, day: 4, time: "1-2", type: "theory" },
-            { name: "人工智能基础(L)", teacher: "赵腾飞", room: "2-113", weekStart: 1, weekEnd: 8, day: 4, time: "3-4", type: "theory" },
-            { name: "职业规划与就业指导2(L)", teacher: "韩东笑", room: "3-B501", weekStart: 13, weekEnd: 16, day: 4, time: "5-6", type: "theory" },
-            
+            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-213", building: "二教", realTime: "08:00-09:40", weekStart: 1, weekEnd: 6, day: 4, time: "1-2", type: "theory" },
+            { name: "Linux网络编程(L)", teacher: "宋扬", room: "2-501", building: "二教", realTime: "08:00-09:40", weekStart: 7, weekEnd: 8, day: 4, time: "1-2", type: "theory" },
+            { name: "人工智能基础(L)", teacher: "赵腾飞", room: "2-113", building: "二教", realTime: "10:00-11:40", weekStart: 1, weekEnd: 8, day: 4, time: "3-4", type: "theory" },
+            { name: "职业规划与就业指导2(L)", teacher: "韩东笑", room: "3-B501", building: "三教", realTime: "14:00-15:35", weekStart: 13, weekEnd: 16, day: 4, time: "5-6", type: "theory" },
+
             // ================= 星期五 =================
-            { name: "中国共产党党史(L)", teacher: "任少执", room: "3-B501", weekStart: 1, weekEnd: 8, day: 5, time: "1-2", type: "theory" },
-            
+            { name: "中国共产党历史(L)", teacher: "任少执", room: "3-B501", building: "三教", realTime: "08:00-09:40", weekStart: 1, weekEnd: 8, day: 5, time: "1-2", type: "theory" },
+
             // ================= 9-18周 实训/实践 (归入 full 全天节次) =================
+            // 注意：以下 6 条来自教务系统截图/《下学期课程安排整理》，桌面《课程安排.txt》未收录，
+            // 该 txt 的阶段总览甚至写明"第9-12周 无排课"。经用户 2026-08-24 确认后保留原样，未按 txt 删除。
             { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "专项安排", weekStart: 9, weekEnd: 10, day: "all", time: "full", type: "practical" },
             { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "专项安排", weekStart: 11, weekEnd: 12, day: "all", time: "full", type: "practical" },
             { name: "网络应用与编程实训(E)", teacher: "赵腾飞、郑宏云", room: "专项安排", weekStart: 13, weekEnd: 14, day: "all", time: "full", type: "practical" },
@@ -425,7 +471,7 @@
         // segment：所属"上午/下午/夜晚"分段；segmentStart：是否该分段的第一节（用于只显示一次分段标签）
         const timeSlots = [
             { id: "1-2", name: "1-2节<br><span style='font-size:0.8em;color:#9CA3AF'>08:00-09:40</span>", segment: "morning", segmentStart: true, segmentLabel: "上午" },
-            { id: "3-4", name: "3-4节<br><span style='font-size:0.8em;color:#9CA3AF'>10:00-11:40</span>", segment: "morning", segmentStart: false },
+            { id: "3-4", name: "3-4节<br><span style='font-size:0.8em;color:#9CA3AF'>10:00-12:00</span>", segment: "morning", segmentStart: false },
             { id: "5-6", name: "5-6节<br><span style='font-size:0.8em;color:#9CA3AF'>14:00-15:35</span>", segment: "afternoon", segmentStart: true, segmentLabel: "下午" },
             { id: "7-8", name: "7-8节<br><span style='font-size:0.8em;color:#9CA3AF'>15:55-17:30</span>", segment: "afternoon", segmentStart: false },
             { id: "9-10", name: "9-10节<br><span style='font-size:0.8em;color:#9CA3AF'>18:00-19:40</span>", segment: "evening", segmentStart: true, segmentLabel: "夜晚" },
@@ -437,7 +483,7 @@
         const periodMeta = {
             "full":  { label: "全天",     time: "集中实训/实践安排", order: 0 },
             "1-2":   { label: "1-2节",   time: "08:00-09:40",      order: 1 },
-            "3-4":   { label: "3-4节",   time: "10:00-11:40",      order: 2 },
+            "3-4":   { label: "3-4节",   time: "10:00-12:00",      order: 2 },
             "5-6":   { label: "5-6节",   time: "14:00-15:35",      order: 3 },
             "7-8":   { label: "7-8节",   time: "15:55-17:30",      order: 4 },
             "9-10":  { label: "9-10节",  time: "18:00-19:40",      order: 5 },
@@ -524,13 +570,15 @@
                         div.className = "course-card" + (c.type === "practical" ? " practical" : "");
                         div.innerHTML = `
                             <div class="course-name" title="${c.name}">${c.name}</div>
+                            ${c.realTime ? `<div class="course-time">⏱ ${c.realTime}</div>` : ""}
+                            ${c.timeNote ? `<div class="course-time-note">${c.timeNote}</div>` : ""}
                             <div class="course-info">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                                 <span class="info-text" title="${c.teacher}">${c.teacher}</span>
                             </div>
                             <div class="course-info">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                <span class="info-text" title="${c.room}">${c.room}</span>
+                                <span class="info-text" title="${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}">${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}</span>
                             </div>
                         `;
                         td.appendChild(div);
@@ -590,7 +638,7 @@
                         const card = document.createElement("div");
                         card.className = "mobile-course-card" + (c.type === "practical" ? " practical" : "");
                         card.innerHTML = `
-                            <div class="mobile-course-time">${meta.label} · ${meta.time}</div>
+                            <div class="mobile-course-time">${meta.label} · ${c.realTime || meta.time}</div>
                             <div class="mobile-course-name">${c.name}</div>
                             <div class="mobile-course-info">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
@@ -598,8 +646,9 @@
                             </div>
                             <div class="mobile-course-info">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                ${c.room}
+                                ${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}
                             </div>
+                            ${c.timeNote ? `<div class="mobile-course-time-note">${c.timeNote}</div>` : ""}
                         `;
                         body.appendChild(card);
                     });
