@@ -604,15 +604,25 @@
             font-size: 0.68rem;
             opacity: 0.85;
         }
-        /* 窄屏放不下 4 列并排（每列只剩 ~79px，时间串一挤就溢出），
-           改成"一个节次一块"的纵向布局：表头隐藏，每个格子自己用 data-label 当行内标签。
-           这样宽度再窄也只会往下长，不会横向溢出。 */
+        /* 窄屏保持和电脑端一样的 4 列表格（用户 2026-08-25 指定），只是把字号和内边距压紧。
+           省空间的地方按"影响最小"排序动：先收弹窗内边距，再收单元格内边距，最后才动字号。
+           实测临界点见下面 359px 那档的注释。 */
         @media (max-width: 480px) {
-            .modal-card { padding: 16px; }
-            .timesheet-table {
-                font-size: 0.82rem;
-                margin-top: 10px;
-            }
+            .modal-overlay { padding-left: 10px; padding-right: 10px; }
+            .modal-card { padding: 14px 10px; }
+            .modal-sub, .modal-note { font-size: 0.78rem; }
+            .timesheet-table { font-size: 0.72rem; margin-top: 12px; }
+            .timesheet-table th,
+            .timesheet-table td { padding: 8px 1px; }
+            .timesheet-table thead th { font-size: 0.7rem; }
+            .timesheet-table .is-break td { font-size: 0.68rem; }
+            .break-tag { font-size: 0.62rem; }
+        }
+
+        /* 极窄屏（iPhone SE 一代那种 320px）：4 列并排要把字号压到 10px 以下才塞得进，
+           那已经不能读了，所以这一档降级成"一个节次一块"的纵向布局。
+           每格用 data-label 当行内标签，信息一条不少，只是不再并排对照。 */
+        @media (max-width: 359px) {
             .timesheet-table,
             .timesheet-table tbody,
             .timesheet-table tr,
@@ -620,6 +630,7 @@
                 display: block;
                 width: auto;
             }
+            .timesheet-table { font-size: 0.82rem; }
             .timesheet-table thead { display: none; }
             .timesheet-table tr {
                 margin-top: 10px;
@@ -629,9 +640,8 @@
             }
             .timesheet-table td {
                 display: flex;
-                /* 用 flex-end + 标签 margin-right:auto，而不是 space-between——
-                   「课间」那格的值后面还跟着一个「大课间」小标签，
-                   space-between 会把它甩到最右边、和时间分家 */
+                /* flex-end + 标签 margin-right:auto，而不是 space-between——
+                   「课间」那格的值后面还跟着「大课间」小标签，space-between 会把它甩到最右 */
                 justify-content: flex-end;
                 align-items: baseline;
                 gap: 12px;
@@ -648,7 +658,6 @@
                 font-weight: 500;
                 text-align: left;
             }
-            /* 节次名当这一块的小标题 */
             .timesheet-table .slot-name {
                 display: block;
                 margin: 0 0 6px;
@@ -658,7 +667,6 @@
                 font-size: 0.88rem;
             }
             .timesheet-table .slot-name::before { content: none; }
-            /* 没有表头了，三教这一项改用左色条 + 底色标成基准 */
             .timesheet-table .is-base {
                 margin: 2px -12px;
                 padding: 4px 12px 4px 9px;
@@ -667,7 +675,7 @@
             }
             .timesheet-table .is-break td { font-size: 0.78rem; }
             .timesheet-table .is-break .slot-name { font-size: 0.82rem; }
-            .break-tag { margin-left: 4px; }
+            .break-tag { margin-left: 4px; font-size: 0.7rem; }
         }
         .course-info {
             color: var(--text-light);
