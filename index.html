@@ -29,13 +29,18 @@
             --practical-card-bg: #ECFDF5;
             --practical-card-border: #A7F3D0;
             --practical-name: #064E3B;
-            /* 节次/时间列：上午/下午/夜晚三段的配色 */
-            --segment-morning-bg: #FFF7ED;
-            --segment-morning-text: #C2410C;
-            --segment-afternoon-bg: #EFF6FF;
-            --segment-afternoon-text: #1D4ED8;
-            --segment-evening-bg: #F5F3FF;
-            --segment-evening-text: #6D28D9;
+            /* 节次/时间列：上午/下午/夜晚三段的配色
+               bg=整格底色，text=文字/描边色，accent=最左侧那条竖色带 */
+            --segment-morning-bg: #FFEDD5;
+            --segment-morning-text: #9A3412;
+            --segment-morning-accent: #F97316;
+            --segment-afternoon-bg: #DBEAFE;
+            --segment-afternoon-text: #1E40AF;
+            --segment-afternoon-accent: #3B82F6;
+            --segment-evening-bg: #EDE9FE;
+            --segment-evening-text: #5B21B6;
+            --segment-evening-accent: #8B5CF6;
+            --slot-time-text: #4B5563;
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -56,12 +61,18 @@
                 --practical-card-bg: rgba(52, 211, 153, 0.12);
                 --practical-card-border: rgba(52, 211, 153, 0.35);
                 --practical-name: #6EE7B7;
-                --segment-morning-bg: rgba(251, 146, 60, 0.12);
+                /* 深色下用算好的不透明色（不是半透明）——这一列是 sticky 冻结列，
+                   半透明会让横向滚动的课程卡片从底下透出来 */
+                --segment-morning-bg: #463631;
                 --segment-morning-text: #FDBA74;
-                --segment-afternoon-bg: rgba(96, 165, 250, 0.12);
+                --segment-morning-accent: #FB923C;
+                --segment-afternoon-bg: #243A5B;
                 --segment-afternoon-text: #93C5FD;
-                --segment-evening-bg: rgba(167, 139, 250, 0.12);
+                --segment-afternoon-accent: #60A5FA;
+                --segment-evening-bg: #34345B;
                 --segment-evening-text: #C4B5FD;
+                --segment-evening-accent: #A78BFA;
+                --slot-time-text: #AEB9C7;
             }
         }
         html { -webkit-text-size-adjust: 100%; }
@@ -152,12 +163,37 @@
             z-index: 2;
             box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
         }
-        /* 节次/时间列按"上午/下午/夜晚"分段配色，仅作用于这一列 */
-        .time-col.segment-morning { background-color: var(--segment-morning-bg); }
-        .time-col.segment-afternoon { background-color: var(--segment-afternoon-bg); }
-        .time-col.segment-evening { background-color: var(--segment-evening-bg); }
+        /* 节次/时间列按"上午/下午/夜晚"分段配色，仅作用于这一列。
+           区分度靠三件事一起做：加深的底色 + 最左侧 5px 竖色带 + 描边药丸标签。
+           竖色带用 inset box-shadow 而不是 border，因为这列还要叠着 sticky 的投影，
+           且 inset 不占盒模型宽度，不会受 border-collapse 影响。 */
+        .time-col.segment-morning,
+        .time-col.segment-afternoon,
+        .time-col.segment-evening {
+            box-shadow: inset 5px 0 0 var(--seg-accent), 2px 0 4px rgba(0, 0, 0, 0.06);
+        }
+        .time-col.segment-morning {
+            --seg-accent: var(--segment-morning-accent);
+            background-color: var(--segment-morning-bg);
+        }
+        .time-col.segment-afternoon {
+            --seg-accent: var(--segment-afternoon-accent);
+            background-color: var(--segment-afternoon-bg);
+        }
+        .time-col.segment-evening {
+            --seg-accent: var(--segment-evening-accent);
+            background-color: var(--segment-evening-bg);
+        }
+        /* 分段标签做成描边药丸：边框用 currentColor，深浅两种模式都自动成立 */
         .time-segment-label {
-            margin-top: 6px;
+            /* block + fit-content + auto 左右外距：既独占一行（不会跟上面的小字时间挤在一行），
+               药丸宽度又只贴着文字走，不会被拉成整列那么宽 */
+            display: block;
+            width: fit-content;
+            margin: 7px auto 0;
+            padding: 2px 9px;
+            border: 1.5px solid currentColor;
+            border-radius: 999px;
             font-size: 0.72rem;
             font-weight: 700;
             letter-spacing: 0.05em;
@@ -165,6 +201,11 @@
         .segment-morning .time-segment-label { color: var(--segment-morning-text); }
         .segment-afternoon .time-segment-label { color: var(--segment-afternoon-text); }
         .segment-evening .time-segment-label { color: var(--segment-evening-text); }
+        /* 节次下面那行小字时间（以前是写死的 #9CA3AF，底色加深后看不清） */
+        .slot-time {
+            font-size: 0.8em;
+            color: var(--slot-time-text);
+        }
         .course-card {
             background-color: var(--theory-card-bg);
             border: 1px solid var(--theory-card-border);
@@ -481,13 +522,13 @@
         // 时间槽配置（左侧固定 1-12 节，时间固定不随周次变化）
         // segment：所属"上午/下午/夜晚"分段；segmentStart：是否该分段的第一节（用于只显示一次分段标签）
         const timeSlots = [
-            { id: "1-2", name: "1-2节<br><span style='font-size:0.8em;color:#9CA3AF'>08:00-09:40</span>", segment: "morning", segmentStart: true, segmentLabel: "上午" },
-            { id: "3-4", name: "3-4节<br><span style='font-size:0.8em;color:#9CA3AF'>10:20-12:00</span>", segment: "morning", segmentStart: false },
-            { id: "5-6", name: "5-6节<br><span style='font-size:0.8em;color:#9CA3AF'>14:00-15:35</span>", segment: "afternoon", segmentStart: true, segmentLabel: "下午" },
-            { id: "7-8", name: "7-8节<br><span style='font-size:0.8em;color:#9CA3AF'>15:55-17:30</span>", segment: "afternoon", segmentStart: false },
-            { id: "9-10", name: "9-10节<br><span style='font-size:0.8em;color:#9CA3AF'>18:00-19:40</span>", segment: "evening", segmentStart: true, segmentLabel: "夜晚" },
-            { id: "11-12", name: "11-12节<br><span style='font-size:0.8em;color:#9CA3AF'>19:50-21:30</span>", segment: "evening", segmentStart: false },
-            { id: "full", name: "全天<br><span style='font-size:0.8em;color:#9CA3AF'>实训/实践</span>", segment: null }
+            { id: "1-2", name: "1-2节<br><span class='slot-time'>08:00-09:40</span>", segment: "morning", segmentStart: true, segmentLabel: "上午" },
+            { id: "3-4", name: "3-4节<br><span class='slot-time'>10:20-12:00</span>", segment: "morning", segmentStart: false },
+            { id: "5-6", name: "5-6节<br><span class='slot-time'>14:00-15:35</span>", segment: "afternoon", segmentStart: true, segmentLabel: "下午" },
+            { id: "7-8", name: "7-8节<br><span class='slot-time'>15:55-17:30</span>", segment: "afternoon", segmentStart: false },
+            { id: "9-10", name: "9-10节<br><span class='slot-time'>18:00-19:40</span>", segment: "evening", segmentStart: true, segmentLabel: "夜晚" },
+            { id: "11-12", name: "11-12节<br><span class='slot-time'>19:50-21:30</span>", segment: "evening", segmentStart: false },
+            { id: "full", name: "全天<br><span class='slot-time'>实训/实践</span>", segment: null }
         ];
 
         // 每个节次对应的具体时间文案与排序权重（"full"全天类排在最前，代表当天以集中实训为主）
