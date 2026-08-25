@@ -1156,6 +1156,49 @@
             .time-footnote { margin-top: 12px; font-size: 0.75rem; }
         }
 
+        /* ===== 下拉刷新 ===== */
+        .pull-refresh {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 60;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+            /* 默认藏在屏幕上方，靠 JS 改 translateY 把它拉下来 */
+            transform: translateY(-64px);
+            opacity: 0;
+        }
+        /* 松手回弹时才要过渡；跟手下拉的过程中由 JS 关掉，不然会拖泥带水 */
+        .pull-refresh.is-animating {
+            transition: transform 0.25s ease, opacity 0.25s ease;
+        }
+        .pull-refresh-circle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            margin-top: max(10px, env(safe-area-inset-top));
+            border-radius: 50%;
+            background: var(--card-bg);
+            color: var(--primary);
+            box-shadow: 0 3px 10px -2px rgba(0, 0, 0, 0.28);
+        }
+        .pull-arrow { transition: transform 0.18s ease; }
+        /* 拉过阈值：箭头翻过来，示意"松手就刷新" */
+        .pull-refresh.is-ready .pull-arrow { transform: rotate(180deg); }
+        .pull-spinner { display: none; animation: pull-spin 0.8s linear infinite; }
+        .pull-refresh.is-loading .pull-arrow { display: none; }
+        .pull-refresh.is-loading .pull-spinner { display: block; }
+        @keyframes pull-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+            .pull-refresh.is-animating { transition: none; }
+            .pull-arrow { transition: none; }
+            .pull-spinner { animation-duration: 2s; }
+        }
+
         /* 底部安全区（全面屏手势条）额外留白 */
         @supports (padding: max(0px)) {
             .container { padding-bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px)); }
@@ -1163,6 +1206,15 @@
     </style>
 </head>
 <body>
+    <!-- 下拉刷新指示器。只在"添加到主屏幕"的独立窗口里启用——
+         浏览器里本来就有原生下拉刷新，再做一个会两套手势打架 -->
+    <div class="pull-refresh" id="pullRefresh" aria-hidden="true">
+        <div class="pull-refresh-circle">
+            <svg class="pull-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+            <svg class="pull-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>📅 2026-2027第一学期课程排表系统<span class="print-week" id="printWeek"></span></h1>
@@ -1907,6 +1959,83 @@
                 : `学期未开始或已结束，按开学日推算为第 ${realCurrentWeek} 周`;
         }
 
+        // =================== 下拉刷新 ===================
+        // 只在"添加到主屏幕"后的独立窗口里启用。普通浏览器标签页里，
+        // Safari/Chrome 自带下拉刷新，再挂一套会两边同时触发。
+        function isStandaloneApp() {
+            return window.matchMedia("(display-mode: standalone)").matches
+                || window.navigator.standalone === true;
+        }
+
+        function setupPullToRefresh() {
+            if (!isStandaloneApp()) return;
+
+            const el = document.getElementById("pullRefresh");
+            const THRESHOLD = 70;      // 拉到这个距离才算数
+            const MAX_PULL = 110;      // 再往下拉也不动了
+            let startY = 0;
+            let pulling = false;
+            let distance = 0;
+            let refreshing = false;
+
+            function paint(d) {
+                distance = d;
+                el.style.transform = "translateY(" + (d - 64) + "px)";
+                el.style.opacity = Math.min(1, d / THRESHOLD);
+                el.classList.toggle("is-ready", d >= THRESHOLD);
+            }
+
+            function reset(animate) {
+                el.classList.toggle("is-animating", !!animate);
+                paint(0);
+                el.classList.remove("is-ready");
+            }
+
+            // 有浮层开着的时候不接管下拉：日期面板自己要处理手势，作息表弹窗要能滚
+            function blocked() {
+                return refreshing
+                    || !document.getElementById("date-panel").hidden
+                    || !document.getElementById("timesheet-modal").hidden;
+            }
+
+            document.addEventListener("touchstart", (e) => {
+                if (blocked() || e.touches.length !== 1 || window.scrollY > 0) { pulling = false; return; }
+                startY = e.touches[0].clientY;
+                pulling = true;
+                el.classList.remove("is-animating");
+            }, { passive: true });
+
+            document.addEventListener("touchmove", (e) => {
+                if (!pulling) return;
+                const dy = e.touches[0].clientY - startY;
+                // 往上滑、或者页面已经不在顶部了，就交还给正常滚动
+                if (dy <= 0 || window.scrollY > 0) { pulling = false; reset(true); return; }
+                // 阻尼：手指走的距离打个对折，拉起来才有"拽住"的手感
+                paint(Math.min(dy * 0.45, MAX_PULL));
+                // 阻止 iOS 独立窗口里的橡皮筋，否则整页跟着往下窜
+                e.preventDefault();
+            }, { passive: false });
+
+            document.addEventListener("touchend", () => {
+                if (!pulling) return;
+                pulling = false;
+                if (distance < THRESHOLD) { reset(true); return; }
+
+                refreshing = true;
+                el.classList.add("is-animating", "is-loading");
+                el.classList.remove("is-ready");
+                el.style.transform = "translateY(6px)";
+                el.style.opacity = "1";
+                // 留一帧让 spinner 转起来，不然点下去像没反应就白屏了
+                setTimeout(() => location.reload(), 260);
+            }, { passive: true });
+
+            // 从后台切回来时可能停在半途，复位一下
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden && !refreshing) reset(false);
+            });
+        }
+
         // 初始化
         function init() {
             const select = document.getElementById("week-select");
@@ -2085,6 +2214,8 @@
             });
             // iOS 从 bfcache 恢复（比如从别的页面点返回）不触发 load，只触发 pageshow
             window.addEventListener("pageshow", renderNextClassBar);
+
+            setupPullToRefresh();
 
             // 起始周：地址栏 ?week= 优先（便于分享/收藏某一周），否则按今天定位到当前教学周
             goToWeek(getWeekFromUrl() || realCurrentWeek);
