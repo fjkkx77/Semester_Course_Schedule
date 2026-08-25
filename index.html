@@ -594,6 +594,9 @@
         }
         .table-responsive {
             overflow-x: auto;
+            /* 横滑到表格尽头后别把多余的滑动传给浏览器——那会触发返回上一页手势，
+               整页重载。网格视图下横滑看后面几天很常见，很容易滑到边界。 */
+            overscroll-behavior-x: contain;
         }
         table {
             width: 100%;
@@ -1971,10 +1974,14 @@
             if (!isStandaloneApp()) return;
 
             const el = document.getElementById("pullRefresh");
-            const THRESHOLD = 70;      // 拉到这个距离才算数
-            const MAX_PULL = 110;      // 再往下拉也不动了
+            const THRESHOLD = 85;      // 指示器要拉到这个位移才算数
+            const MAX_PULL = 120;      // 再往下拉也不动了
+            const DAMPING = 0.42;      // 手指走的距离打个折，才有"拽住"的手感
+            const DEADZONE = 16;       // 起手这段距离内只观察方向，不做任何事
             let startY = 0;
-            let pulling = false;
+            let startX = 0;
+            let pulling = false;       // 还在观察或已经在下拉
+            let locked = false;        // 方向已经判定为"确实是下拉"
             let distance = 0;
             let refreshing = false;
 
@@ -2001,17 +2008,33 @@
             document.addEventListener("touchstart", (e) => {
                 if (blocked() || e.touches.length !== 1 || window.scrollY > 0) { pulling = false; return; }
                 startY = e.touches[0].clientY;
+                startX = e.touches[0].clientX;
                 pulling = true;
+                locked = false;
                 el.classList.remove("is-animating");
             }, { passive: true });
 
             document.addEventListener("touchmove", (e) => {
                 if (!pulling) return;
                 const dy = e.touches[0].clientY - startY;
-                // 往上滑、或者页面已经不在顶部了，就交还给正常滚动
-                if (dy <= 0 || window.scrollY > 0) { pulling = false; reset(true); return; }
-                // 阻尼：手指走的距离打个对折，拉起来才有"拽住"的手感
-                paint(Math.min(dy * 0.45, MAX_PULL));
+                const dx = e.touches[0].clientX - startX;
+
+                // 起手先观察一段，别一有几像素位移就当成下拉。
+                // 手指按下的瞬间接触点会抖，之前没有这道死区，往上滑之前那点抖动
+                // 就足以让指示器闪出来、还顺手 preventDefault 把页面滚动卡住。
+                if (!locked) {
+                    if (Math.abs(dy) < DEADZONE && Math.abs(dx) < DEADZONE) return;
+                    // 出了死区就一锤定音：往上、或者横向为主，这一整次手势都不再接管，
+                    // 中途再往下拉也不认——不然"上滑到一半回带一下"又会触发
+                    if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) { pulling = false; return; }
+                    locked = true;
+                }
+
+                // 拉到一半改主意往回收：收起指示器并交还控制权，
+                // 不然会一直 preventDefault，用户想往上滚却发现页面卡住不动
+                if (dy <= 0 || window.scrollY > 0) { pulling = false; locked = false; reset(true); return; }
+                // 位移从死区之外开始算，手感上才是"从按住的地方接着拉"
+                paint(Math.min((dy - DEADZONE) * DAMPING, MAX_PULL));
                 // 阻止 iOS 独立窗口里的橡皮筋，否则整页跟着往下窜
                 e.preventDefault();
             }, { passive: false });
@@ -2019,6 +2042,9 @@
             document.addEventListener("touchend", () => {
                 if (!pulling) return;
                 pulling = false;
+                // 只观察过方向、从没真正进入下拉的，直接当没发生
+                if (!locked) return;
+                locked = false;
                 if (distance < THRESHOLD) { reset(true); return; }
 
                 refreshing = true;
@@ -2027,6 +2053,7 @@
                 el.style.transform = "translateY(6px)";
                 el.style.opacity = "1";
                 // 留一帧让 spinner 转起来，不然点下去像没反应就白屏了
+                window.__pullRefreshFired = true;   // 给自动化测试用：区分是这里刷的还是别的原因重载
                 setTimeout(() => location.reload(), 260);
             }, { passive: true });
 
