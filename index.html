@@ -181,43 +181,178 @@
             touch-action: manipulation;
             white-space: nowrap;
         }
-        /* 按日期跳转：用原生 input[type=date]，手机上会直接调起系统日期选择器 */
+        /* 按日期跳转：自研日历面板。
+           不用原生 input[type=date] 了——Chrome 那个下拉的日期格子是连续滚动的，
+           滑到下个月了顶部标题还停在上个月，很容易选错（用户 2026-08-25 反馈）。
+           那个下拉是浏览器 UI，页面里的 CSS/JS 够不着，只能自己实现。 */
         .date-jump {
+            position: relative;
+            flex: 0 0 auto;
+        }
+        .date-jump-btn {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 6px;
-            flex: 0 0 auto;
+            width: 100%;
             min-height: 44px;
-            padding: 0 12px;
+            padding: 0 14px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background: var(--select-bg);
-            color: var(--text-light);
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 16px;
             cursor: pointer;
+            touch-action: manipulation;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
-        .date-jump input[type="date"] {
-            border: 0;
-            padding: 0;
-            background: transparent;
-            color: var(--text-main);
-            /* 16px 是 iOS 不自动放大页面的下限 */
-            font-size: 16px;
-            font-family: inherit;
-            outline: none;
-            cursor: pointer;
-        }
-        .date-jump:focus-within {
+        .date-jump-btn svg { color: var(--text-light); flex: 0 0 auto; }
+        .date-jump-btn[aria-expanded="true"],
+        .date-jump-btn:focus-visible {
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
         }
-        /* 选了个学期外的日期时闪一下红框 */
-        .date-jump.is-invalid {
-            border-color: #DC2626;
-            box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.18);
+        @media (hover: hover) {
+            .date-jump-btn:hover { border-color: var(--primary); }
+        }
+
+        .date-panel {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            z-index: 40;
+            width: 288px;
+            max-width: calc(100vw - 24px);
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--card-bg);
+            box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.25);
+        }
+        .date-panel[hidden] { display: none; }
+        .date-panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .dp-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .dp-nav {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--select-bg);
+            color: var(--text-main);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .dp-nav:disabled { opacity: 0.35; cursor: default; }
+        @media (hover: hover) {
+            .dp-nav:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+        }
+        /* 星期表头和日期格用同一套 7 列网格，保证上下对齐 */
+        .dp-weekdays,
+        .dp-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        .dp-weekdays {
+            margin-bottom: 4px;
+        }
+        .dp-weekdays span {
+            text-align: center;
+            font-size: 0.72rem;
+            color: var(--text-light);
+            padding: 2px 0;
+        }
+        .dp-day {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            min-height: 34px;
+            padding: 0;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        /* 当月第一天之前的空位：占格但不可点 */
+        .dp-day.is-blank { visibility: hidden; }
+        .dp-day:disabled {
+            color: var(--text-light);
+            opacity: 0.35;
+            cursor: default;
+        }
+        .dp-day.is-today {
+            font-weight: 700;
+            color: var(--primary);
+            box-shadow: inset 0 0 0 1.5px var(--primary);
+        }
+        .dp-day.is-selected {
+            background: var(--primary);
+            color: #fff;
+            font-weight: 700;
+            box-shadow: none;
+        }
+        /* 那天有课就在数字底下点一个小点 */
+        .dp-day.has-class::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 5px;
+            width: 4px;
+            height: 4px;
+            margin-left: -2px;
+            border-radius: 50%;
+            background: var(--primary);
+        }
+        .dp-day.is-selected.has-class::after { background: #fff; }
+        .dp-day:disabled.has-class::after { display: none; }
+        @media (hover: hover) {
+            .dp-day:hover:not(:disabled):not(.is-selected) { background: var(--th-bg); }
+        }
+        .date-panel-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .dp-hint {
+            font-size: 0.7rem;
+            color: var(--text-light);
+        }
+        .dp-today {
+            padding: 6px 12px;
+            border: 1px solid var(--primary);
+            border-radius: 999px;
+            background: transparent;
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            touch-action: manipulation;
         }
         @media (hover: hover) {
-            .date-jump:hover { border-color: var(--primary); }
+            .dp-today:hover { background: var(--primary); color: #fff; }
         }
 
         /* 跳过去之后把那一天整列/整块点亮一下，让人知道落在哪儿了 */
@@ -888,7 +1023,9 @@
             .controls { width: 100%; flex-wrap: wrap; }
             .week-selector { flex: 1 1 0; width: auto; min-width: 0; }
             .week-now-btn { flex: 1 1 100%; }
-            .date-jump { flex: 1 1 100%; justify-content: center; }
+            .date-jump { flex: 1 1 100%; }
+            /* 窄屏日期按钮是整行宽的，面板改成左右都贴住、宽度跟着走 */
+            .date-panel { left: 0; right: 0; width: auto; max-width: none; }
             .mobile-view-toggle { display: flex; }
             /* 默认（列表模式）：显示按天分组列表，隐藏网格表格 */
             .desktop-view { display: none; }
@@ -986,10 +1123,29 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </button>
                 <button type="button" class="week-now-btn" id="btn-current-week">回到本周</button>
-                <label class="date-jump" title="选一个日期，直接跳到那天">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                    <input type="date" id="date-jump" aria-label="跳到指定日期">
-                </label>
+                <div class="date-jump">
+                    <button type="button" class="date-jump-btn" id="date-jump-btn" aria-haspopup="dialog" aria-expanded="false" title="选一个日期，直接跳到那天">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        <span id="date-jump-label">--</span>
+                    </button>
+                    <div class="date-panel" id="date-panel" role="dialog" aria-label="选择日期" hidden>
+                        <div class="date-panel-head">
+                            <button type="button" class="dp-nav" id="dp-prev" aria-label="上个月">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            </button>
+                            <span class="dp-title" id="dp-title"></span>
+                            <button type="button" class="dp-nav" id="dp-next" aria-label="下个月">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+                        </div>
+                        <div class="dp-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+                        <div class="dp-grid" id="dp-grid"></div>
+                        <div class="date-panel-foot">
+                            <span class="dp-hint">灰色＝不在学期内</span>
+                            <button type="button" class="dp-today" id="dp-today">回到今天</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <!-- 「下一节课」提示条：显示的永远是"现在真实时间"对应的课，
@@ -1464,58 +1620,109 @@
             bar.hidden = false;
         }
 
-        // ============ 按日期跳转 ============
-        // yyyy-mm-dd（input[type=date] 的 value 格式）
-        function toDateInputValue(date) {
-            const mm = String(date.getMonth() + 1).padStart(2, "0");
-            const dd = String(date.getDate()).padStart(2, "0");
-            return date.getFullYear() + "-" + mm + "-" + dd;
+        // ============ 按日期跳转（自研日历面板） ============
+        // 面板当前翻到的月份，以及已选中的那一天
+        let panelCursor = null;      // Date，只用年月
+        let selectedDate = null;     // Date
+
+        function sameDay(a, b) {
+            return a && b && a.getFullYear() === b.getFullYear()
+                && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
         }
 
-        // 学期最后一天 = 开学日 + 总周数×7 - 1
         function semesterLastDate() {
             const d = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
             d.setDate(d.getDate() + TOTAL_WEEKS * 7 - 1);
             return d;
         }
 
-        // 跳到某个真实日期所在的那一周，并把那一天点亮
-        // 最后一次有效的日期。任何被拒绝的输入都要把框拨回它，
-        // 否则框里显示的日期和表格显示的周次会对不上，看起来像"选了但没反应"。
-        let lastValidDateValue = null;
-
-        function rejectDate(input) {
-            const wrap = document.querySelector(".date-jump");
-            wrap.classList.add("is-invalid");
-            setTimeout(() => wrap.classList.remove("is-invalid"), 1200);
-            if (lastValidDateValue) input.value = lastValidDateValue;
+        // 这一天有没有课（含全天实训），用来在日历上点个小点
+        function hasClassOn(date) {
+            const week = weekOfDate(date);
+            if (week === null) return false;
+            const dayIndex = date.getDay() === 0 ? 7 : date.getDay();
+            return courses.some(c => courseOnDay(c, week, dayIndex));
         }
 
-        function jumpToDate(value) {
-            const input = document.getElementById("date-jump");
+        function formatDateLabel(date) {
+            return date.getFullYear() + "/" + String(date.getMonth() + 1).padStart(2, "0") + "/" + String(date.getDate()).padStart(2, "0");
+        }
 
-            // 空值：Chrome 的日期选择器自带「清除」按钮，一点就清空了，
-            // 框会变回什么都没有的样子，所以这里也要拨回去
-            if (!value) { rejectDate(input); return; }
+        // 画出 panelCursor 那个月。只画当月的天，月初空出来的格子留白，
+        // 不像很多日历那样把上/下月的日子也填进来——用户要的就是"一版只有一个月"。
+        function renderDatePanel() {
+            const grid = document.getElementById("dp-grid");
+            const title = document.getElementById("dp-title");
+            const y = panelCursor.getFullYear();
+            const m = panelCursor.getMonth();
 
-            // 用 yyyy-mm-dd 手工拆，不要 new Date("2026-09-24")——那会按 UTC 解析，时区一偏就差一天
-            const parts = value.split("-").map(Number);
-            if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) { rejectDate(input); return; }
-            const date = new Date(parts[0], parts[1] - 1, parts[2]);
-            // 拆出来的数字还要能还原成同一天，挡掉 2026-02-30 这种"日期看着合法、实际不存在"的输入
-            if (date.getFullYear() !== parts[0] || date.getMonth() !== parts[1] - 1 || date.getDate() !== parts[2]) {
-                rejectDate(input); return;
+            title.textContent = y + "年" + (m + 1) + "月";
+
+            const first = new Date(y, m, 1);
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            // getDay() 是 0(周日)~6(周六)，本页星期一打头，所以周日要排到第 7 位
+            const leading = (first.getDay() + 6) % 7;
+
+            const start = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
+            const last = semesterLastDate();
+            const today = new Date();
+
+            let html = "";
+            for (let i = 0; i < leading; i++) {
+                html += '<button type="button" class="dp-day is-blank" disabled tabindex="-1"></button>';
             }
+            for (let d = 1; d <= daysInMonth; d++) {
+                const date = new Date(y, m, d);
+                const inSemester = date >= start && date <= last;
+                const cls = ["dp-day"];
+                if (sameDay(date, today)) cls.push("is-today");
+                if (sameDay(date, selectedDate)) cls.push("is-selected");
+                if (inSemester && hasClassOn(date)) cls.push("has-class");
+                html += '<button type="button" class="' + cls.join(" ") + '" data-day="' + d + '"'
+                     + (inSemester ? "" : " disabled")
+                     + ' aria-label="' + (m + 1) + "月" + d + '日">' + d + "</button>";
+            }
+            grid.innerHTML = html;
 
-            // min/max 只是让浏览器把范围外的日子置灰，年份/月份下拉本身不受限，
-            // 手输和某些浏览器实现仍能绕过去，所以这里必须自己再挡一次
+            // 翻到学期首/末月就没得再翻了
+            document.getElementById("dp-prev").disabled =
+                (y === start.getFullYear() && m === start.getMonth());
+            document.getElementById("dp-next").disabled =
+                (y === last.getFullYear() && m === last.getMonth());
+        }
+
+        function openDatePanel() {
+            // 每次打开都回到"选中那天"所在的月，而不是停在上次翻到哪
+            panelCursor = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+            renderDatePanel();
+            document.getElementById("date-panel").hidden = false;
+            document.getElementById("date-jump-btn").setAttribute("aria-expanded", "true");
+        }
+
+        function closeDatePanel() {
+            document.getElementById("date-panel").hidden = true;
+            document.getElementById("date-jump-btn").setAttribute("aria-expanded", "false");
+        }
+
+        function isDatePanelOpen() {
+            return !document.getElementById("date-panel").hidden;
+        }
+
+        function shiftPanelMonth(delta) {
+            panelCursor = new Date(panelCursor.getFullYear(), panelCursor.getMonth() + delta, 1);
+            renderDatePanel();
+        }
+
+        // 选中某一天：更新按钮文字、跳到那一周、点亮那一天
+        function selectDate(date, opts) {
             const week = weekOfDate(date);
-            if (week === null) { rejectDate(input); return; }
-
-            lastValidDateValue = value;
-            const dayIndex = date.getDay() === 0 ? 7 : date.getDay();
+            if (week === null) return;          // 面板已经把学期外的日子禁掉了，这里再挡一次
+            selectedDate = date;
+            document.getElementById("date-jump-label").textContent = formatDateLabel(date);
             goToWeek(week);
-            highlightDay(dayIndex);
+            if (!opts || opts.highlight !== false) {
+                highlightDay(date.getDay() === 0 ? 7 : date.getDay());
+            }
         }
 
         // 把某一天点亮：桌面/网格点亮整列，移动端列表点亮那一天的卡片块并滚过去。
@@ -1624,9 +1831,9 @@
                 goToWeek(realCurrentWeek);
                 if (semesterActive) {
                     highlightDay(todayDayIndex);
-                    // 日期框也跟着回到今天，保持三处（周次/表格/日期框）说的是同一天
-                    document.getElementById("date-jump").value = toDateInputValue(new Date());
-                    lastValidDateValue = document.getElementById("date-jump").value;
+                    // 日期按钮也跟着回到今天，保持三处（周次/表格/日期按钮）说的是同一天。
+                    // highlight 交给上面的 highlightDay，这里别再点一次
+                    selectDate(new Date(), { highlight: false });
                 }
             });
 
@@ -1637,18 +1844,46 @@
             try { savedMode = localStorage.getItem("scheduleMobileViewMode") || "list"; } catch (e) {}
             setMobileViewMode(savedMode);
 
-            // 日期跳转：可选范围锁在学期内（从开学日和总周数推，不写死日期）
-            const dateInput = document.getElementById("date-jump");
-            dateInput.min = toDateInputValue(SEMESTER_START_DATE);
-            dateInput.max = toDateInputValue(semesterLastDate());
-            // 必须给个初始值。input[type=date] 空值时 iOS 上是完全空白的
-            // （不像桌面 Chrome 会显示"年/月/日"占位符），整个框看起来就是个孤零零的图标，
-            // 没人看得出这是干什么用的。默认填今天，学期外就填开学第一天。
-            dateInput.value = semesterActive
-                ? toDateInputValue(new Date())
-                : toDateInputValue(SEMESTER_START_DATE);
-            lastValidDateValue = dateInput.value;
-            dateInput.addEventListener("change", (e) => jumpToDate(e.target.value));
+            // 日期跳转面板接线
+            const dateBtn = document.getElementById("date-jump-btn");
+            const datePanel = document.getElementById("date-panel");
+
+            // 初始选中今天；学期外（放假期间打开）就落在开学第一天
+            selectedDate = semesterActive
+                ? new Date()
+                : new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
+            document.getElementById("date-jump-label").textContent = formatDateLabel(selectedDate);
+
+            dateBtn.addEventListener("click", () => {
+                isDatePanelOpen() ? closeDatePanel() : openDatePanel();
+            });
+            document.getElementById("dp-prev").addEventListener("click", () => shiftPanelMonth(-1));
+            document.getElementById("dp-next").addEventListener("click", () => shiftPanelMonth(1));
+            document.getElementById("dp-today").addEventListener("click", () => {
+                const t = new Date();
+                if (weekOfDate(t) === null) return;   // 放假期间"回到今天"没有意义
+                selectDate(t);
+                closeDatePanel();
+            });
+            // 日期格是动态生成的，事件挂在容器上，不用每次重画都重新绑
+            document.getElementById("dp-grid").addEventListener("click", (e) => {
+                const btn = e.target.closest(".dp-day");
+                if (!btn || btn.disabled || !btn.dataset.day) return;
+                selectDate(new Date(panelCursor.getFullYear(), panelCursor.getMonth(), parseInt(btn.dataset.day, 10)));
+                closeDatePanel();
+            });
+            // 点面板外面关掉；点按钮本身交给它自己的 toggle，别在这儿重复处理
+            document.addEventListener("click", (e) => {
+                if (!isDatePanelOpen()) return;
+                if (datePanel.contains(e.target) || dateBtn.contains(e.target)) return;
+                closeDatePanel();
+            });
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" && isDatePanelOpen()) {
+                    closeDatePanel();
+                    dateBtn.focus();
+                }
+            });
 
             // 作息表弹窗：按钮打开，关闭按钮 / 点遮罩 / Esc 三种方式关闭
             const timesheetModal = document.getElementById("timesheet-modal");
