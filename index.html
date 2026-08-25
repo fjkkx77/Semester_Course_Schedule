@@ -218,6 +218,9 @@
         }
 
         .date-panel {
+            /* pan-y：这块区域只把纵向手势交给浏览器，横向手势归面板自己。
+               不加的话右滑会被浏览器当成"返回上一页"，整页重新加载（实测踩到）。 */
+            touch-action: pan-y;
             position: absolute;
             top: calc(100% + 6px);
             right: 0;
@@ -238,10 +241,55 @@
             gap: 8px;
             margin-bottom: 10px;
         }
+        /* 标题本身是个按钮：点一下直接选月份，不用一个个翻 */
         .dp-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 10px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-main);
+            font-family: inherit;
             font-size: 0.95rem;
             font-weight: 700;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .dp-title svg { transition: transform 0.15s ease; color: var(--text-light); }
+        .dp-title[aria-expanded="true"] svg { transform: rotate(180deg); }
+        .dp-title[aria-expanded="true"] { border-color: var(--border); background: var(--th-bg); }
+        @media (hover: hover) {
+            .dp-title:hover { background: var(--th-bg); }
+        }
+        /* 月份直选列表。学期只跨几个月，一屏放得下，不用滚动 */
+        .dp-months {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            padding: 4px 0;
+        }
+        .dp-months[hidden] { display: none; }
+        .dp-month {
+            padding: 10px 8px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--select-bg);
             color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .dp-month.is-current {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #fff;
+            font-weight: 700;
+        }
+        @media (hover: hover) {
+            .dp-month:hover:not(.is-current) { border-color: var(--primary); color: var(--primary); }
         }
         .dp-nav {
             display: inline-flex;
@@ -268,6 +316,10 @@
             grid-template-columns: repeat(7, 1fr);
             gap: 2px;
         }
+        /* hidden 属性的 UA 样式是 display:none，但上面这条 display:grid 特异性更高会盖掉它，
+           元素照样显示。凡是自己声明了 display 的元素，都要把 [hidden] 补回来。 */
+        .dp-weekdays[hidden],
+        .dp-grid[hidden] { display: none; }
         .dp-weekdays {
             margin-bottom: 4px;
         }
@@ -1133,13 +1185,17 @@
                             <button type="button" class="dp-nav" id="dp-prev" aria-label="上个月">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                             </button>
-                            <span class="dp-title" id="dp-title"></span>
+                            <button type="button" class="dp-title" id="dp-title" aria-haspopup="true" aria-expanded="false" title="点这里直接选月份">
+                                <span id="dp-title-text"></span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
                             <button type="button" class="dp-nav" id="dp-next" aria-label="下个月">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                             </button>
                         </div>
                         <div class="dp-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
                         <div class="dp-grid" id="dp-grid"></div>
+                        <div class="dp-months" id="dp-months" hidden></div>
                         <div class="date-panel-foot">
                             <span class="dp-hint">灰色＝不在学期内</span>
                             <button type="button" class="dp-today" id="dp-today">回到今天</button>
@@ -1652,11 +1708,10 @@
         // 不像很多日历那样把上/下月的日子也填进来——用户要的就是"一版只有一个月"。
         function renderDatePanel() {
             const grid = document.getElementById("dp-grid");
-            const title = document.getElementById("dp-title");
             const y = panelCursor.getFullYear();
             const m = panelCursor.getMonth();
 
-            title.textContent = y + "年" + (m + 1) + "月";
+            document.getElementById("dp-title-text").textContent = y + "年" + (m + 1) + "月";
 
             const first = new Date(y, m, 1);
             const daysInMonth = new Date(y, m + 1, 0).getDate();
@@ -1691,15 +1746,56 @@
                 (y === last.getFullYear() && m === last.getMonth());
         }
 
+        // 学期覆盖到的所有月份（这学期只有 8~12 月，一屏放得下，不用滚动）
+        function semesterMonths() {
+            const start = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), 1);
+            const last = semesterLastDate();
+            const months = [];
+            const cur = new Date(start);
+            while (cur.getFullYear() < last.getFullYear()
+                || (cur.getFullYear() === last.getFullYear() && cur.getMonth() <= last.getMonth())) {
+                months.push(new Date(cur));
+                cur.setMonth(cur.getMonth() + 1);
+            }
+            return months;
+        }
+
+        function renderMonthList() {
+            const box = document.getElementById("dp-months");
+            box.innerHTML = semesterMonths().map(d => {
+                const isCur = d.getFullYear() === panelCursor.getFullYear() && d.getMonth() === panelCursor.getMonth();
+                return '<button type="button" class="dp-month' + (isCur ? " is-current" : "")
+                     + '" data-y="' + d.getFullYear() + '" data-m="' + d.getMonth() + '">'
+                     + d.getFullYear() + "年" + (d.getMonth() + 1) + "月</button>";
+            }).join("");
+        }
+
+        // 月份列表和日期网格互斥显示，共用面板这一块地方
+        function setMonthListOpen(open) {
+            document.getElementById("dp-months").hidden = !open;
+            document.getElementById("dp-grid").hidden = open;
+            document.querySelector(".dp-weekdays").hidden = open;
+            document.getElementById("dp-title").setAttribute("aria-expanded", open ? "true" : "false");
+            if (open) {
+                // 月份列表展开时，上/下月按钮没有意义
+                document.getElementById("dp-prev").disabled = true;
+                document.getElementById("dp-next").disabled = true;
+                renderMonthList();
+            } else {
+                renderDatePanel();   // 收起时由它重算两个按钮的禁用状态
+            }
+        }
+
         function openDatePanel() {
             // 每次打开都回到"选中那天"所在的月，而不是停在上次翻到哪
             panelCursor = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-            renderDatePanel();
+            setMonthListOpen(false);      // 每次打开都从日期网格开始，不停在上次的月份列表
             document.getElementById("date-panel").hidden = false;
             document.getElementById("date-jump-btn").setAttribute("aria-expanded", "true");
         }
 
         function closeDatePanel() {
+            setMonthListOpen(false);
             document.getElementById("date-panel").hidden = true;
             document.getElementById("date-jump-btn").setAttribute("aria-expanded", "false");
         }
@@ -1859,6 +1955,61 @@
             });
             document.getElementById("dp-prev").addEventListener("click", () => shiftPanelMonth(-1));
             document.getElementById("dp-next").addEventListener("click", () => shiftPanelMonth(1));
+
+            // 点标题直接选月份，省得一个月一个月地翻
+            document.getElementById("dp-title").addEventListener("click", () => {
+                setMonthListOpen(document.getElementById("dp-months").hidden);
+            });
+            document.getElementById("dp-months").addEventListener("click", (e) => {
+                const btn = e.target.closest(".dp-month");
+                if (!btn) return;
+                panelCursor = new Date(parseInt(btn.dataset.y, 10), parseInt(btn.dataset.m, 10), 1);
+                setMonthListOpen(false);
+            });
+
+            // 手机上左右滑动切换月份。
+            // 只在 touchend 时按位移判断，全程不 preventDefault——面板本身不需要纵向滚动，
+            // 但页面要能滚，拦了反而会把页面滚动一起卡住。
+            let swipeX = 0, swipeY = 0, swiping = false;
+            // 刚翻过页的标记：手指在日期格上横扫，抬起时浏览器可能补一个 click，
+            // 不挡住的话会顺手把那天选中、面板还跟着关了
+            let justSwiped = false;
+
+            datePanel.addEventListener("touchstart", (e) => {
+                if (e.touches.length !== 1) { swiping = false; return; }
+                const x = e.touches[0].clientX;
+                // 屏幕最边上那一条是系统的返回/前进手势区，起手落在那儿就整个让给浏览器，
+                // 别和它抢——抢不过，而且会两边都触发
+                const edge = 28;
+                if (x < edge || x > document.documentElement.clientWidth - edge) {
+                    swiping = false;
+                    return;
+                }
+                swipeX = x;
+                swipeY = e.touches[0].clientY;
+                swiping = true;
+            }, { passive: true });
+
+            datePanel.addEventListener("touchend", (e) => {
+                if (!swiping) return;
+                swiping = false;
+                if (!document.getElementById("dp-months").hidden) return;   // 月份列表展开时不接管滑动
+                const t = e.changedTouches[0];
+                const dx = t.clientX - swipeX;
+                const dy = t.clientY - swipeY;
+                // 位移够大、且确实是横向为主，才算一次翻页；否则当成点击/竖滑放过
+                if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+                const dir = dx < 0 ? 1 : -1;   // 手指往左推 = 看下个月
+                const btn = document.getElementById(dir === 1 ? "dp-next" : "dp-prev");
+                if (!btn.disabled) shiftPanelMonth(dir);
+                justSwiped = true;
+                setTimeout(() => { justSwiped = false; }, 350);
+            }, { passive: true });
+
+            // 翻完页那一下补出来的 click，在冒泡到日期格/外部关闭之前就拦下来
+            datePanel.addEventListener("click", (e) => {
+                if (justSwiped) { e.stopPropagation(); e.preventDefault(); }
+            }, true);
             document.getElementById("dp-today").addEventListener("click", () => {
                 const t = new Date();
                 if (weekOfDate(t) === null) return;   // 放假期间"回到今天"没有意义
