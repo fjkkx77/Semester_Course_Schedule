@@ -1480,22 +1480,39 @@
         }
 
         // 跳到某个真实日期所在的那一周，并把那一天点亮
-        function jumpToDate(value) {
+        // 最后一次有效的日期。任何被拒绝的输入都要把框拨回它，
+        // 否则框里显示的日期和表格显示的周次会对不上，看起来像"选了但没反应"。
+        let lastValidDateValue = null;
+
+        function rejectDate(input) {
             const wrap = document.querySelector(".date-jump");
-            if (!value) return;
+            wrap.classList.add("is-invalid");
+            setTimeout(() => wrap.classList.remove("is-invalid"), 1200);
+            if (lastValidDateValue) input.value = lastValidDateValue;
+        }
+
+        function jumpToDate(value) {
+            const input = document.getElementById("date-jump");
+
+            // 空值：Chrome 的日期选择器自带「清除」按钮，一点就清空了，
+            // 框会变回什么都没有的样子，所以这里也要拨回去
+            if (!value) { rejectDate(input); return; }
+
             // 用 yyyy-mm-dd 手工拆，不要 new Date("2026-09-24")——那会按 UTC 解析，时区一偏就差一天
             const parts = value.split("-").map(Number);
-            if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return;
+            if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) { rejectDate(input); return; }
             const date = new Date(parts[0], parts[1] - 1, parts[2]);
-
-            const week = weekOfDate(date);
-            if (week === null) {
-                // min/max 已经限制了选择器，但手输仍可能越界，给个红框反馈
-                wrap.classList.add("is-invalid");
-                setTimeout(() => wrap.classList.remove("is-invalid"), 1200);
-                return;
+            // 拆出来的数字还要能还原成同一天，挡掉 2026-02-30 这种"日期看着合法、实际不存在"的输入
+            if (date.getFullYear() !== parts[0] || date.getMonth() !== parts[1] - 1 || date.getDate() !== parts[2]) {
+                rejectDate(input); return;
             }
 
+            // min/max 只是让浏览器把范围外的日子置灰，年份/月份下拉本身不受限，
+            // 手输和某些浏览器实现仍能绕过去，所以这里必须自己再挡一次
+            const week = weekOfDate(date);
+            if (week === null) { rejectDate(input); return; }
+
+            lastValidDateValue = value;
             const dayIndex = date.getDay() === 0 ? 7 : date.getDay();
             goToWeek(week);
             highlightDay(dayIndex);
@@ -1609,6 +1626,7 @@
                     highlightDay(todayDayIndex);
                     // 日期框也跟着回到今天，保持三处（周次/表格/日期框）说的是同一天
                     document.getElementById("date-jump").value = toDateInputValue(new Date());
+                    lastValidDateValue = document.getElementById("date-jump").value;
                 }
             });
 
@@ -1629,6 +1647,7 @@
             dateInput.value = semesterActive
                 ? toDateInputValue(new Date())
                 : toDateInputValue(SEMESTER_START_DATE);
+            lastValidDateValue = dateInput.value;
             dateInput.addEventListener("change", (e) => jumpToDate(e.target.value));
 
             // 作息表弹窗：按钮打开，关闭按钮 / 点遮罩 / Esc 三种方式关闭
