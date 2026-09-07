@@ -328,14 +328,15 @@
         .dp-weekdays[hidden],
         .dp-pane[hidden] { display: none; }
 
-        /* 翻月份用「三格轮播」：上个月 / 当前月 / 下个月 三块并排放在 track 里，
-           平时 track 停在 -100%（正好露出中间那块），翻页就把它推到 0% 或 -200%。
-           两侧那两块平时就画好了，所以手指拖到一半能同时看见两个月，
-           而不是松手之后才整块换掉。 */
+        /* 翻月份靠一条横向轨道：学期覆盖到的每个月各占一块并排放着（本学期 8~12 共 5 块），
+           viewport 只露出其中一块，翻月＝把轨道推到 -i*一屏宽。
+           所有月份开面板前就画好了，所以手指拖到一半能同时看见两个月，
+           而且翻页全程一次 DOM 都不用动。 */
+        /* 高度既不写死也不做过渡：三块都补满 6 行，天然一样高，viewport 用 auto 就行。
+           动 height 会让整张网格每帧重排一遍——实测拖动时三帧掉一帧，卡顿感主要来自这里 */
         .dp-viewport {
             position: relative;
             overflow: hidden;
-            transition: height 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
         }
         .dp-viewport[hidden] { display: none; }
         .dp-track {
@@ -343,11 +344,13 @@
             /* 必须 flex-start：默认 stretch 会把三块拉成 viewport 那么高，
                就量不到每个月自己的真实行高，高度过渡也就没法算了 */
             align-items: flex-start;
-            transform: translateX(-100%);
+            /* translate3d 而不是 translateX：强制单独合成层，位移就不用每帧重绘了。
+               实际位移由 JS 按"第几块"设成像素值，这里只是个初值 */
+            transform: translate3d(0, 0, 0);
             will-change: transform;
         }
         .dp-track.is-sliding {
-            transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+            transition: transform 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
         }
         .dp-pane {
             flex: 0 0 100%;
@@ -375,7 +378,9 @@
             font-size: 0.85rem;
             cursor: pointer;
             touch-action: manipulation;
-            transition: background-color 0.16s ease, color 0.16s ease, transform 0.12s ease;
+            /* 只给 transform 加过渡。日期格有 42 个，多挂两个可过渡属性就是 42 份样式计算，
+               而且背景/文字色的变化都发生在整块重建时，本来也过渡不起来 */
+            transition: transform 0.12s ease;
         }
         .dp-day:not(:disabled):active { transform: scale(0.88); }
         /* 当月第一天之前的空位：占格但不可点 */
@@ -463,7 +468,6 @@
         }
         .dp-months:not([hidden]) { animation: dp-months-in 0.18s ease-out; }
         @media (prefers-reduced-motion: reduce) {
-            .dp-viewport,
             .dp-track.is-sliding,
             .dp-day,
             .dp-nav,
@@ -1316,11 +1320,9 @@
                         </div>
                         <div class="dp-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
                         <div class="dp-viewport" id="dp-viewport">
-                            <div class="dp-track" id="dp-track">
-                                <div class="dp-pane" id="dp-pane-prev" aria-hidden="true"></div>
-                                <div class="dp-pane" id="dp-grid"></div>
-                                <div class="dp-pane" id="dp-pane-next" aria-hidden="true"></div>
-                            </div>
+                            <!-- 轨道内容由 buildTrack() 一次性生成：学期内每个月一块。
+                                 除当前那块外都带 inert，挡掉焦点和点击 -->
+                            <div class="dp-track" id="dp-track"></div>
                         </div>
                         <div class="dp-months" id="dp-months" hidden></div>
                         <div class="date-panel-foot">
@@ -1845,11 +1847,18 @@
                 && idx <= last.getFullYear() * 12 + last.getMonth();
         }
 
-        // 画出某一个月的日期格。只画当月的天，月初空出来的格子留白，
-        // 不像很多日历那样把上/下月的日子也填进来。
-        // inactive 用于轮播里左右两侧那两块（还没翻到的月份）：
-        // 内容一样，但键盘 Tab 不该走进去，所以整块的按钮都设成 tabindex="-1"
-        function buildMonthHTML(y, m, inactive) {
+        // 这个月要占几行（含月初的空位）
+        function rowsOfMonth(y, m) {
+            const leading = (new Date(y, m, 1).getDay() + 6) % 7;
+            return Math.ceil((leading + new Date(y, m + 1, 0).getDate()) / 7);
+        }
+
+        // 画出某一个月的日期格。只画当月的天，上下月的日子不填进来，空格留白。
+        // cells 是要补齐到的格子数：各月本来 5 行/6 行不等，全部补成一样高，翻月才
+        // 不用动 viewport 的高度——动 height 每帧都要把整张网格重排，那正是拖动掉帧的主因。
+        // 补到几行不写死，取本学期实际需要的最大行数（这学期 8 月和 11 月要 6 行，
+        // 若某学期各月都只要 5 行，就不会白留一行空的）
+        function buildMonthHTML(y, m, cells) {
             const first = new Date(y, m, 1);
             const daysInMonth = new Date(y, m + 1, 0).getDate();
             // getDay() 是 0(周日)~6(周六)，本页星期一打头，所以周日要排到第 7 位
@@ -1857,65 +1866,116 @@
 
             const start = new Date(SEMESTER_START_DATE.getFullYear(), SEMESTER_START_DATE.getMonth(), SEMESTER_START_DATE.getDate());
             const last = semesterLastDate();
-            const today = new Date();
-            const tab = inactive ? ' tabindex="-1"' : "";
+            const blank = '<button type="button" class="dp-day is-blank" disabled tabindex="-1"></button>';
 
             let html = "";
-            for (let i = 0; i < leading; i++) {
-                html += '<button type="button" class="dp-day is-blank" disabled tabindex="-1"></button>';
-            }
+            for (let i = 0; i < leading; i++) html += blank;
             for (let d = 1; d <= daysInMonth; d++) {
                 const date = new Date(y, m, d);
                 const inSemester = date >= start && date <= last;
                 const cls = ["dp-day"];
-                if (sameDay(date, today)) cls.push("is-today");
-                if (sameDay(date, selectedDate)) cls.push("is-selected");
+                // is-today / is-selected 不在这里打：整条轨道只建一次，这两个标记会变，
+                // 由 refreshMarks() 单独改那两个格子
                 if (inSemester && hasClassOn(date)) cls.push("has-class");
                 html += '<button type="button" class="' + cls.join(" ") + '" data-day="' + d + '"'
-                     + (inSemester ? "" : " disabled") + tab
+                     + (inSemester ? "" : " disabled")
                      + ' aria-label="' + (m + 1) + "月" + d + '日">' + d + "</button>";
             }
+            for (let i = leading + daysInMonth; i < cells; i++) html += blank;
             return html;
         }
 
-        // 中间那块画 panelCursor 当月，两侧顺手把上/下个月也画好——
-        // 这样手指一横滑就能立刻看见相邻月份跟着动，不用等松手才渲染
-        function renderDatePanel() {
+        // 标题 + 上/下月按钮的可用状态。翻页落定时只需要更新这些，不必重画格子
+        function updatePanelChrome() {
             const y = panelCursor.getFullYear();
             const m = panelCursor.getMonth();
-
             document.getElementById("dp-title-text").textContent = y + "年" + (m + 1) + "月";
-            document.getElementById("dp-grid").innerHTML = buildMonthHTML(y, m, false);
-            fillSidePane(-1);
-            fillSidePane(1);
-
-            // 翻到学期首/末月就没得再翻了
-            document.getElementById("dp-prev").disabled = !monthInSemester(y, m - 1);
-            document.getElementById("dp-next").disabled = !monthInSemester(y, m + 1);
-            syncPanelHeight();
+            // 翻到学期首/末月就没得再翻了。先比再写：改 disabled 会触发重排，
+            // 而绝大多数次翻月这两个值根本没变，白写就是白掉帧
+            const prevBtn = document.getElementById("dp-prev");
+            const nextBtn = document.getElementById("dp-next");
+            const noPrev = dpIndex <= 0;
+            const noNext = dpIndex >= dpMonths.length - 1;
+            if (prevBtn.disabled !== noPrev) prevBtn.disabled = noPrev;
+            if (nextBtn.disabled !== noNext) nextBtn.disabled = noNext;
         }
 
-        // 两侧的预渲染块；越过学期边界就留空，配合拖动时的阻尼表示"到头了"
-        function fillSidePane(dir) {
-            const el = document.getElementById(dir < 0 ? "dp-pane-prev" : "dp-pane-next");
-            const d = new Date(panelCursor.getFullYear(), panelCursor.getMonth() + dir, 1);
-            el.innerHTML = monthInSemester(d.getFullYear(), d.getMonth())
-                ? buildMonthHTML(d.getFullYear(), d.getMonth(), true)
-                : "";
+        // 一个学期就那么几个月（本学期 8~12 共 5 个），干脆一次全画出来、排成一排。
+        // 之后翻月自始至终不动一次 DOM，动画结束那一帧真的什么都不用做——
+        // 之前"落定时咔一下"就是因为那一帧还在搬 DOM（实测 50~80ms 的重排）
+        let dpMonths = [];        // 轨道里每一块对应哪个月，下标就是块的位置
+        let dpIndex = 0;          // 当前停在第几块
+        let dpBuilt = false;
+
+        function dpPanes() { return document.getElementById("dp-track").children; }
+
+        function buildTrack() {
+            const track = document.getElementById("dp-track");
+            dpMonths = semesterMonths();
+            const cells = 7 * Math.max(...dpMonths.map(d => rowsOfMonth(d.getFullYear(), d.getMonth())));
+            track.innerHTML = dpMonths.map(d =>
+                '<div class="dp-pane" inert aria-hidden="true">'
+                + buildMonthHTML(d.getFullYear(), d.getMonth(), cells) + "</div>").join("");
+            dpBuilt = true;
         }
 
-        // viewport 高度＝当前月的真实高度（一个月 4~6 行不等，不定高就会露出下面那块）。
-        // 这里是"直接定死不走过渡"，换月过程中的高度动画由 slideTo / 拖动那边自己控制。
-        // 面板还 hidden 着的时候量出来是 0，那就不写，免得把高度清成 0
-        function syncPanelHeight() {
-            const vp = document.getElementById("dp-viewport");
-            const h = document.getElementById("dp-grid").offsetHeight;
-            if (!h) return;
-            vp.style.transition = "none";
-            vp.style.height = h + "px";
-            void vp.offsetHeight;      // 强制重排，让上面这次赋值不吃过渡
-            vp.style.transition = "";
+        // 某个日期落在第几块（越界就夹到两端）
+        function monthSlot(date) {
+            if (!dpMonths.length) return 0;
+            const i = monthIndex(date) - monthIndex(dpMonths[0]);
+            return Math.max(0, Math.min(dpMonths.length - 1, i));
         }
+
+        // 轨道停在第 i 块时的位移。用像素而不是百分比：块数是变的，百分比没法写死。
+        // 代价是换屏幕方向后要重新算，所以下面挂了 resize 监听
+        function trackRestX(i) {
+            return -i * (document.getElementById("dp-viewport").clientWidth || 0);
+        }
+
+        function setTrackX(px) {
+            document.getElementById("dp-track").style.transform =
+                "translate3d(" + px + "px, 0, 0)";
+        }
+
+        // 只有当前这块参与焦点和点击，其余用 inert 挡掉。翻页时只动变化的那两块
+        function updatePaneInert(prevIdx) {
+            const panes = dpPanes();
+            if (prevIdx === -1) {          // 打开面板时一次性刷全部
+                for (let i = 0; i < panes.length; i++) {
+                    panes[i].inert = (i !== dpIndex);
+                    if (i === dpIndex) panes[i].removeAttribute("aria-hidden");
+                    else panes[i].setAttribute("aria-hidden", "true");
+                }
+                return;
+            }
+            if (panes[prevIdx]) {
+                panes[prevIdx].inert = true;
+                panes[prevIdx].setAttribute("aria-hidden", "true");
+            }
+            if (panes[dpIndex]) {
+                panes[dpIndex].inert = false;
+                panes[dpIndex].removeAttribute("aria-hidden");
+            }
+        }
+
+        // 找到某一天对应的那个格子。格子的内容（有没有课的小点、是否禁用）建好就不变了，
+        // 只有"选中"和"今天"两个标记会变，改这两个格子的 class 就够，不用重画整块
+        function dayCell(date) {
+            if (!dpMonths.length) return null;
+            const pane = dpPanes()[monthIndex(date) - monthIndex(dpMonths[0])];
+            return pane ? pane.querySelector('.dp-day[data-day="' + date.getDate() + '"]') : null;
+        }
+
+        function refreshMarks() {
+            const track = document.getElementById("dp-track");
+            track.querySelectorAll(".dp-day.is-selected").forEach(el => el.classList.remove("is-selected"));
+            track.querySelectorAll(".dp-day.is-today").forEach(el => el.classList.remove("is-today"));
+            const sel = dayCell(selectedDate);
+            if (sel) sel.classList.add("is-selected");
+            const today = dayCell(new Date());
+            if (today) today.classList.add("is-today");
+        }
+
 
         // 学期覆盖到的所有月份（这学期只有 8~12 月，一屏放得下，不用滚动）
         function semesterMonths() {
@@ -1953,7 +2013,7 @@
                 document.getElementById("dp-next").disabled = true;
                 renderMonthList();
             } else {
-                renderDatePanel();   // 收起时由它重算两个按钮的禁用状态
+                updatePanelChrome();   // 格子内容还在，收起时只要重算两个按钮的禁用状态
             }
         }
 
@@ -1963,14 +2023,22 @@
             const panel = document.getElementById("date-panel");
             clearTimeout(dpCloseTimer);
             panel.classList.remove("is-closing");
-            // 每次打开都回到选中那天所在的月，而不是停在上次翻到哪
-            panelCursor = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-            // 先显示再渲染：还 hidden 着的时候量不到高度，viewport 就没法定高
+            clearTimeout(dpSlideTimer);
+            dpSlideTimer = null;
+            dpSlideDone = null;
+            dpSliding = false;
+            // 先显示再摆位：还 hidden 着的时候量不到宽度，算不出轨道该停在哪
             panel.hidden = false;
+            if (!dpBuilt) buildTrack();          // 兜底：空闲预建没来得及跑就现建
+            // 每次打开都回到选中那天所在的月，而不是停在上次翻到哪
+            dpIndex = monthSlot(selectedDate);
+            panelCursor = new Date(dpMonths[dpIndex].getFullYear(), dpMonths[dpIndex].getMonth(), 1);
             const track = document.getElementById("dp-track");
             track.classList.remove("is-sliding");
-            track.style.transform = "";     // 回到 CSS 里的 -100%，也就是中间那块
-            dpSliding = false;
+            setTrackX(trackRestX(dpIndex));
+            refreshMarks();
+            updatePanelChrome();
+            updatePaneInert(-1);
             setMonthListOpen(false);        // 每次打开都从日期网格开始，不停在上次的月份列表
             document.getElementById("date-jump-btn").setAttribute("aria-expanded", "true");
         }
@@ -1998,49 +2066,79 @@
             return !panel.hidden && !panel.classList.contains("is-closing");
         }
 
-        // 和 CSS 里 .dp-track.is-sliding / .dp-viewport 的过渡时长保持一致，改一个要改两处
-        const DP_SLIDE_MS = 280;
+        // 必须和 CSS 里 .dp-track.is-sliding 的 0.24s 对齐，改一个就要改另一个
+        const DP_SLIDE_MS = 240;
         let dpSliding = false;
+        let dpSlideTimer = null;
+        let dpSlideDone = null;      // 本次滑动的收尾动作，提前打断时也要执行
 
+        // 上一次翻页还在动就又来了新操作：立刻把它结算掉，从终态接着走。
+        // 以前是 if (dpSliding) return 直接吞掉，连续快滑时第二下没反应，很像卡住了
+        function finalizeSlide() {
+            if (!dpSliding) return;
+            clearTimeout(dpSlideTimer);
+            dpSlideTimer = null;
+            const done = dpSlideDone;
+            dpSlideDone = null;
+            if (done) done();
+        }
+
+        // 先结算上一次再算目标：否则连点两下时，第二下拿的还是旧的 panelCursor，
+        // 算出来的目标和第一下一样，就被当成"没动"吞掉了
         function shiftPanelMonth(delta) {
+            finalizeSlide();
             goToPanelMonth(new Date(panelCursor.getFullYear(), panelCursor.getMonth() + delta, 1));
         }
 
-        // 翻到任意一个月：相邻月份两侧已经画好，直接推 track 就行；
-        // 跨多个月（点月份列表选的）先把目标月塞进对应那一侧再推，
-        // 看起来就是朝正确方向滑过去，而不是原地闪一下换掉
         function goToPanelMonth(target) {
-            if (dpSliding) return;
-            const dir = Math.sign(monthIndex(target) - monthIndex(panelCursor));
-            if (dir === 0) return;
-            if (prefersReducedMotion()) {          // 系统开了"减弱动效"就直接换，不做动画
-                panelCursor = target;
-                renderDatePanel();
-                return;
-            }
-            const pane = document.getElementById(dir < 0 ? "dp-pane-prev" : "dp-pane-next");
-            pane.innerHTML = buildMonthHTML(target.getFullYear(), target.getMonth(), true);
-            slideTo(dir, target);
+            finalizeSlide();
+            // 越界保护：连点太快时按钮的禁用状态还没来得及更新
+            if (!monthInSemester(target.getFullYear(), target.getMonth())) return;
+            slideToIndex(monthSlot(target));
         }
 
-        // 把 track 推到位；动画走完之后换掉 panelCursor 原地重画，再无过渡地弹回 -100%。
-        // 这一下瞬移看不见，因为那时中间那块的内容已经就是目标月了
-        function slideTo(dir, target) {
+        // 翻到第 idx 块。这里只改一个 transform——轨道上所有月份早就画好了，
+        // 动画期间和结束时都不碰 DOM，收尾只更新标题和两个按钮的状态
+        function slideToIndex(idx) {
+            finalizeSlide();
+            if (idx === dpIndex) return;
             const track = document.getElementById("dp-track");
-            const vp = document.getElementById("dp-viewport");
-            const paneH = document.getElementById(dir < 0 ? "dp-pane-prev" : "dp-pane-next").offsetHeight;
-            dpSliding = true;
-            track.classList.add("is-sliding");
-            track.style.transform = dir < 0 ? "translateX(0%)" : "translateX(-200%)";
-            vp.style.transition = "";              // 交回给 CSS 那条 height 过渡
-            if (paneH) vp.style.height = paneH + "px";
-            setTimeout(() => {
-                panelCursor = target;
-                track.classList.remove("is-sliding");
-                track.style.transform = "";
-                renderDatePanel();
+            const prevIdx = dpIndex;
+            dpIndex = idx;
+            panelCursor = new Date(dpMonths[idx].getFullYear(), dpMonths[idx].getMonth(), 1);
+            // 标题留到落定再换：滑动途中屏幕上主要还是旧的那个月
+            const settle = () => {
                 dpSliding = false;
-            }, DP_SLIDE_MS);
+                track.classList.remove("is-sliding");
+                updatePanelChrome();
+                // inert 改一次要重算整块 42 个格子的焦点树（实测 27ms），而它只影响
+                // 键盘 Tab 和读屏，晚一帧完全无感——落定那一帧就别背这个成本了
+                requestAnimationFrame(() => updatePaneInert(prevIdx));
+            };
+            if (prefersReducedMotion()) {       // 系统开了"减弱动效"就直接到位，不做动画
+                track.classList.remove("is-sliding");
+                setTrackX(trackRestX(idx));
+                settle();
+                return;
+            }
+            track.classList.add("is-sliding");
+            setTrackX(trackRestX(idx));
+            dpSliding = true;
+            dpSlideDone = settle;
+            dpSlideTimer = setTimeout(finalizeSlide, DP_SLIDE_MS);
+        }
+
+        // 松手没到阈值时弹回当前这块
+        function snapBackTrack() {
+            const track = document.getElementById("dp-track");
+            track.classList.add("is-sliding");
+            setTrackX(trackRestX(dpIndex));
+            dpSliding = true;
+            dpSlideDone = () => {
+                dpSliding = false;
+                track.classList.remove("is-sliding");
+            };
+            dpSlideTimer = setTimeout(finalizeSlide, DP_SLIDE_MS);
         }
 
         // 选中某一天：更新按钮文字、跳到那一周、点亮那一天
@@ -2084,8 +2182,11 @@
             setTimeout(() => cells.forEach(el => el.classList.remove("picked-col")), 1900);
         }
 
+        // 缓存这个 MediaQueryList：每次现 new 一个是有成本的，而它在动画热路径上被反复问
+        let reduceMotionMQ = null;
         function prefersReducedMotion() {
-            return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            if (!reduceMotionMQ) reduceMotionMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
+            return reduceMotionMQ.matches;
         }
 
         // 把某门课的卡片滚进视野并短暂高亮。
@@ -2288,6 +2389,22 @@
             dateBtn.addEventListener("click", () => {
                 isDatePanelOpen() ? closeDatePanel() : openDatePanel();
             });
+
+            // 整条轨道趁页面空闲时先建好（5 个月 210 个格子，低端机上约 200ms），
+            // 用户点开面板时就是现成的，不用当场等
+            if (window.requestIdleCallback) {
+                requestIdleCallback(() => { if (!dpBuilt) buildTrack(); }, { timeout: 3000 });
+            } else {
+                setTimeout(() => { if (!dpBuilt) buildTrack(); }, 1200);
+            }
+
+            // 轨道位移是按像素算的，转屏/改窗口宽度后要重新摆位，否则会停在两块中间
+            window.addEventListener("resize", () => {
+                if (!dpBuilt || !isDatePanelOpen()) return;
+                const track = document.getElementById("dp-track");
+                track.classList.remove("is-sliding");
+                setTrackX(trackRestX(dpIndex));
+            });
             document.getElementById("dp-prev").addEventListener("click", () => shiftPanelMonth(-1));
             document.getElementById("dp-next").addEventListener("click", () => shiftPanelMonth(1));
 
@@ -2306,59 +2423,50 @@
             // 手机上左右拖动切换月份：手指跟手推动整条 track，松手时超过阈值就翻页、
             // 不够就原样弹回来。上/下月两块平时就画好了，所以拖到一半能同时看见两个月，
             // 而不是松手之后整块"啪"地换掉。
-            let dragX = 0, dragY = 0, dragW = 1;
+            let dragX = 0, dragY = 0, dragW = 1, dragRestX = 0;
             let dragOn = false;        // 手指按下了，还没判断出方向
             let dragLocked = false;    // 已经判定为横向手势，正在接管
-            let dragCurH = 0, dragPrevH = 0, dragNextH = 0;
+            let dragRaf = 0, dragPaintX = 0;
             // 刚翻过页的标记：手指在日期格上横扫，抬起时浏览器可能补一个 click，
             // 不挡住的话会顺手把那天选中、面板还跟着关了
             let justSwiped = false;
 
-            function paneHeight(id) {
-                const el = document.getElementById(id);
-                return el.innerHTML ? el.offsetHeight : 0;
+            // 那个方向还有没有块可翻（学期首/末月就到头了）
+            function canShiftMonth(dir) {
+                return dpIndex + dir >= 0 && dpIndex + dir < dpMonths.length;
             }
 
-            // 那个方向还有没有月份可翻（学期首/末月就到头了）
-            function canShiftMonth(dir) {
-                const d = new Date(panelCursor.getFullYear(), panelCursor.getMonth() + dir, 1);
-                return monthInSemester(d.getFullYear(), d.getMonth());
+            // transform 的写入按帧节流：一帧里来几个 touchmove 都只画最后那个位置。
+            // 手指移动事件比屏幕刷新密，不节流就是白算好几遍样式
+            function paintDrag(px) {
+                dragPaintX = px;
+                if (dragRaf) return;
+                dragRaf = requestAnimationFrame(() => { dragRaf = 0; setTrackX(dragPaintX); });
             }
 
             function finishDrag(commit, dir) {
-                const track = document.getElementById("dp-track");
-                const vp = document.getElementById("dp-viewport");
                 dragOn = false;
                 dragLocked = false;
-                if (commit) {
-                    slideTo(dir, new Date(panelCursor.getFullYear(), panelCursor.getMonth() + dir, 1));
-                    return;
-                }
-                // 没到阈值：弹回中间那块，拖动过程中插值出来的高度也一起收回去
-                track.classList.add("is-sliding");
-                track.style.transform = "";
-                vp.style.transition = "";
-                if (dragCurH) vp.style.height = dragCurH + "px";
-                setTimeout(() => { track.classList.remove("is-sliding"); }, DP_SLIDE_MS);
+                if (dragRaf) { cancelAnimationFrame(dragRaf); dragRaf = 0; }
+                if (commit) slideToIndex(dpIndex + dir);
+                else snapBackTrack();       // 没到阈值就弹回来，弹回途中再按下也能接管
             }
 
             datePanel.addEventListener("touchstart", (e) => {
                 dragOn = false;
                 dragLocked = false;
-                if (dpSliding || e.touches.length !== 1) return;
+                if (e.touches.length !== 1) return;
                 if (!document.getElementById("dp-months").hidden) return;   // 月份列表展开时不接管滑动
                 const x = e.touches[0].clientX;
                 // 屏幕最边上那一条是系统的返回/前进手势区，起手落在那儿就整个让给浏览器，
                 // 别和它抢——抢不过，而且会两边都触发
                 const edge = 28;
                 if (x < edge || x > document.documentElement.clientWidth - edge) return;
+                finalizeSlide();     // 上一次还在动就先结算，接着这一次滑，中间不留死区
                 dragX = x;
                 dragY = e.touches[0].clientY;
                 dragW = document.getElementById("dp-viewport").clientWidth || 1;
-                // 三块的高度在按下这一刻量好，拖动过程中就不用反复触发重排了
-                dragCurH = paneHeight("dp-grid");
-                dragPrevH = paneHeight("dp-pane-prev") || dragCurH;
-                dragNextH = paneHeight("dp-pane-next") || dragCurH;
+                dragRestX = trackRestX(dpIndex);
                 dragOn = true;
             }, { passive: true });
 
@@ -2374,7 +2482,6 @@
                     if (Math.abs(dx) <= Math.abs(dy)) { dragOn = false; return; }   // 竖着划：让给页面滚动
                     dragLocked = true;
                     document.getElementById("dp-track").classList.remove("is-sliding");
-                    document.getElementById("dp-viewport").style.transition = "none";
                 }
                 e.preventDefault();
                 const dir = dx < 0 ? 1 : -1;
@@ -2382,15 +2489,7 @@
                 // 到头了还硬拖：给个 0.28 的阻尼，拖得动但明显拉不开，等于告诉你没有下一个月了
                 let shift = ok ? dx : dx * 0.28;
                 shift = Math.max(-dragW, Math.min(dragW, shift));
-                document.getElementById("dp-track").style.transform =
-                    "translateX(calc(-100% + " + shift + "px))";
-                // 高度也跟着一起插值。各月 4~6 行不等，不插值的话松手那一下高度会突然跳一行
-                if (dragCurH) {
-                    const p = Math.min(1, Math.abs(shift) / dragW);
-                    const targetH = ok ? (dir > 0 ? dragNextH : dragPrevH) : dragCurH;
-                    document.getElementById("dp-viewport").style.height =
-                        (dragCurH + (targetH - dragCurH) * p) + "px";
-                }
+                paintDrag(dragRestX + shift);
             }, { passive: false });
 
             datePanel.addEventListener("touchend", (e) => {
@@ -2420,11 +2519,13 @@
                 selectDate(t);
                 closeDatePanel();
             });
-            // 日期格是动态生成的，事件挂在容器上，不用每次重画都重新绑
-            document.getElementById("dp-grid").addEventListener("click", (e) => {
+            // 日期格是动态生成的，事件挂在容器上，不用每次重画都重新绑。
+            // 挂在 track 上而不是某一块上——块会在轨道里轮换，绑到具体块上会跟丢
+            document.getElementById("dp-track").addEventListener("click", (e) => {
                 const btn = e.target.closest(".dp-day");
                 if (!btn || btn.disabled || !btn.dataset.day) return;
-                selectDate(new Date(panelCursor.getFullYear(), panelCursor.getMonth(), parseInt(btn.dataset.day, 10)));
+                if (btn.parentElement !== dpPanes()[dpIndex]) return;   // 只认当前这块（inert 之外再兜一层）
+                selectDate(new Date(dpMonths[dpIndex].getFullYear(), dpMonths[dpIndex].getMonth(), parseInt(btn.dataset.day, 10)));
                 closeDatePanel();
             });
             // 点面板外面关掉；点按钮本身交给它自己的 toggle，别在这儿重复处理
