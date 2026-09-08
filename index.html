@@ -1936,9 +1936,33 @@
             return -i * (document.getElementById("dp-viewport").clientWidth || 0);
         }
 
+        let dpTrackX = 0;      // 轨道最后被设到的位置（不含动画中间态）
+
         function setTrackX(px) {
+            dpTrackX = px;
             document.getElementById("dp-track").style.transform =
                 "translate3d(" + px + "px, 0, 0)";
+        }
+
+        // 轨道此刻在屏幕上的真实位置。
+        // 没在跑动画的时候直接用记着的值——getComputedStyle 会强制刷一次样式，
+        // 而它正好落在 touchstart 这条关键路径上，实测会白白吃掉一帧
+        function currentTrackX() {
+            if (!dpSliding) return dpTrackX;
+            return new DOMMatrixReadOnly(
+                getComputedStyle(document.getElementById("dp-track")).transform).m41;
+        }
+
+        // 把正在跑的动画就地停住，停在当前视觉位置。
+        // Apple 那条"motion must start from the current on-screen value"——
+        // 中途被手抓住时不能瞬移回某一页的静止位，那是最出戏的一下
+        function freezeTrack(x) {
+            const track = document.getElementById("dp-track");
+            track.classList.remove("is-sliding");
+            track.style.transitionDuration = "";
+            track.style.transitionTimingFunction = "";
+            setTrackX(x);
+            return x;
         }
 
         // 只有当前这块参与焦点和点击，其余用 inert 挡掉。翻页时只动变化的那两块
@@ -2070,16 +2094,36 @@
             return !panel.hidden && !panel.classList.contains("is-closing");
         }
 
-        // 手势参数照搬 Swiper 的默认值（2026-09-08 查 nolimits4web/swiper master：
-        // src/core/defaults.ts 的 threshold:5 / touchAngle:45 / longSwipesMs:300 /
-        // longSwipesRatio:0.5，判定逻辑在 src/core/events/onTouchMove.ts、onTouchEnd.ts）。
-        // 这些值是被大量真机验证过的，别凭手感自己拍。
+        // ===================== 手势物理 =====================
+        // 照 Apple《Designing Fluid Interfaces》(WWDC 2018 session 803) 讲的那一套。三条原则：
+        //   ① 松手时把手指的速度交接给动画（velocity handoff）。固定缓动曲线一律从 0 速度起步，
+        //      甩得再快，松手那一下也先停死再重新加速——那正是"手感很重、翻不动"的来源。
+        //   ② 用动量投影决定落到哪一页，而不是拍一个距离阈值：
+        //      "we've taken the velocity, mixed in the deceleration rate, and we end up with
+        //       this projected position where it could go"
+        //   ③ 动画随时可被抓住，且要从当前屏幕上的真实位置接着走，不许瞬移回某一页。
+        //
+        // 轴向判定仍沿用 Swiper 的口径（threshold 5px / touchAngle 45°）。
         const DP_LOCK_DIST2 = 25;        // 5px 的平方：动够这么多才判定是横滑还是竖滑
         const DP_TOUCH_ANGLE = 45;       // 与水平方向夹角小于它才算横滑
-        const DP_LONG_SWIPE_MS = 300;    // 手势超过这么久算"慢拖"，要拖过半屏才翻页
-        const DP_LONG_RATIO = 0.5;       // 慢拖要拖过的比例
-        const DP_MIN_SHORT_PX = 8;       // 快扫也得有个最小位移，免得把点击当成滑动
-        const DP_FLING_VEL = 0.35;       // px/ms（≈350px/s）：超过就算甩动，慢拖也认
+
+        // Apple 的投影公式：project(v) = v * decel / (1 - decel)。
+        // decel 取 UIScrollView 的默认减速率 0.998（每毫秒掉 0.2% 速度），
+        // 于是速度用 px/ms 时系数正好是 499
+        const DP_DECEL = 0.998;
+        const DP_PROJECT = DP_DECEL / (1 - DP_DECEL);
+
+        // 弹簧参数用 SwiftUI 的 response / dampingFraction 口径，取 .snappy 那一档。
+        // damping 略小于 1 会有极轻微的过冲——这正是"活"的感觉，不是 bug
+        const DP_SPRING_RESPONSE = 0.4;   // 秒
+        const DP_SPRING_DAMPING = 0.86;
+        const DP_SLIDE_MS = 300;          // 兜底时长（浏览器不支持 linear() 时用）
+        const DP_SLIDE_MAX_MS = 620;
+
+        // 浏览器支不支持 linear() 缓动（CSS Easing Level 2，2023-12 起 Baseline）。
+        // 支持就能把弹簧曲线采样成缓动函数，动画仍是一条普通 transform 过渡、照样跑在合成器上
+        const DP_HAS_LINEAR = typeof CSS !== "undefined" && CSS.supports
+            && CSS.supports("transition-timing-function", "linear(0, 1)");
 
         // 手指划的方向算不算"横向"：用与水平轴的夹角，不是简单比 dx/dy 大小。
         // 斜着 44 度划也该算横滑——这是 Swiper 的 touchAngle 判定
@@ -2087,38 +2131,84 @@
             return Math.atan2(Math.abs(dy), Math.abs(dx)) * 180 / Math.PI <= DP_TOUCH_ANGLE;
         }
 
-        // 松手时该翻页还是弹回。抽成纯函数是为了能直接喂数据验证——
-        // 靠自动化去"模拟一次快扫"很难还原真实时序，测出来的常常是工具的往返延迟
-        function shouldCommitSwipe(dx, elapsed, speed, width) {
-            if (elapsed <= DP_LONG_SWIPE_MS) return Math.abs(dx) >= DP_MIN_SHORT_PX;   // 快扫：只看方向
-            return Math.abs(dx) >= width * DP_LONG_RATIO || speed >= DP_FLING_VEL;     // 慢拖：过半 或 仍在甩
+        // iOS 的橡皮筋公式：b = (1 - 1/(x*c/d + 1)) * d，c 取 UIScrollView 的 0.55。
+        // 拉得越远越紧，而不是一刀切打个固定折扣——后者一上手就"死"了
+        function rubberBand(offset, dimension) {
+            const x = Math.abs(offset);
+            const b = (1 - 1 / ((x * 0.55 / dimension) + 1)) * dimension;
+            return offset < 0 ? -b : b;
         }
 
-        // 落位要多久：还差多远、手指多快，就用多久走完，再夹到合理区间。
-        // 固定时长会让"快甩一下"之后还慢悠悠滑过去，那正是延迟感的来源
-        function settleDuration(remain, speed) {
-            const ms = speed > 0.05 ? remain / speed : DP_SLIDE_MS;
-            return Math.round(Math.max(DP_SLIDE_MIN_MS, Math.min(DP_SLIDE_MAX_MS, ms)));
+        // 松手后会停在第几页：先按动量投影算出"照这个速度滑下去会停在哪"，
+        // 再吸附到最近的一页。一次最多翻一页，跟 UIScrollView 的分页一致。
+        // 抽成纯函数是为了能直接喂数据验证——用自动化去模拟真实甩动是不可靠的
+        function projectLanding(pos, velocity, width, index, count) {
+            const projected = pos + velocity * DP_PROJECT;
+            let t = Math.round(-projected / width);
+            t = Math.max(index - 1, Math.min(index + 1, t));
+            return Math.max(0, Math.min(count - 1, t));
         }
 
-        // 落位时长：默认值取 Material 3 的 duration.medium2（300ms），
-        // 但松手那一下会按手指速度重算，甩得越快落得越快（embla 的做法）
-        const DP_SLIDE_MS = 300;
-        const DP_SLIDE_MIN_MS = 130;
-        const DP_SLIDE_MAX_MS = 300;   // 落位最慢不超过默认时长，别比按钮翻月还拖沓
+        // 把一条带初速度的弹簧曲线采样成 CSS 的 linear() 缓动串。
+        // distance = 起点减终点（px）；velocity = 松手速度（px/ms，与轨道坐标同向）
+        function springCurve(distance, velocity) {
+            const fallback = { ms: DP_SLIDE_MS, easing: "cubic-bezier(0.05, 0.7, 0.1, 1)" };
+            if (!distance || !DP_HAS_LINEAR) return fallback;
+            const w0 = 2 * Math.PI / DP_SPRING_RESPONSE;      // 无阻尼固有频率 rad/s
+            const z = DP_SPRING_DAMPING;
+            const wd = w0 * Math.sqrt(1 - z * z);             // 阻尼后的频率
+            const step = 1 / 60;                              // 按 60fps 采样
+
+            // 按给定的归一化初速度采一条曲线出来
+            const sample = (v0) => {
+                const B = (v0 + z * w0) / wd;
+                const out = [];
+                for (let t = 0; t < DP_SLIDE_MAX_MS / 1000; t += step) {
+                    const u = Math.exp(-z * w0 * t) * (Math.cos(wd * t) + B * Math.sin(wd * t));
+                    out.push(1 - u);
+                    if (t > 0.1 && Math.abs(u) < 0.002) break;   // 已经贴到目标就收尾
+                }
+                return out;
+            };
+            // 过冲按"像素"算，不按比例：剩下 20px 的时候过冲 40% 也才 8px，肉眼无感；
+            // 而剩一整屏时过冲 10% 就有 30px，那就太弹了
+            const overPx = (arr) => (Math.max.apply(null, arr) - 1) * Math.abs(distance);
+            const maxOverPx = 14;
+
+            let v0 = (velocity * 1000) / distance;
+            let pts = sample(v0);
+            if (overPx(pts) > maxOverPx) {
+                // 0 速度一定不过冲，v0 过冲太多，中间二分几次找个刚好的
+                let lo = 0, hi = v0;
+                for (let i = 0; i < 8; i++) {
+                    const mid = (lo + hi) / 2;
+                    const cand = sample(mid);
+                    if (overPx(cand) > maxOverPx) hi = mid; else { lo = mid; pts = cand; }
+                }
+            }
+            if (pts.length < 2) return fallback;
+            pts[pts.length - 1] = 1;                          // 最后一点钉死，保证精确落位
+            return {
+                ms: Math.round(Math.max(120, (pts.length - 1) * step * 1000)),
+                easing: "linear(" + pts.map(n => n.toFixed(4)).join(",") + ")",
+            };
+        }
+
         let dpSliding = false;
         let dpSlideTimer = null;
         let dpSlideDone = null;      // 本次滑动的收尾动作，提前打断时也要执行
 
-        // 上一次翻页还在动就又来了新操作：立刻把它结算掉，从终态接着走。
-        // 以前是 if (dpSliding) return 直接吞掉，连续快滑时第二下没反应，很像卡住了
-        function finalizeSlide() {
+        // 上一次翻页还在动就又来了新操作：立刻结算，别把这一下吞掉。
+        // interrupted=true 表示是被新手势打断的：逻辑状态照常结算，
+        // 但轨道保持在当前视觉位置，交给接下来的拖动接着走
+        function finalizeSlide(interrupted) {
             if (!dpSliding) return;
             clearTimeout(dpSlideTimer);
             dpSlideTimer = null;
             const done = dpSlideDone;
             dpSlideDone = null;
-            if (done) done();
+            dpSliding = false;
+            if (done) done(!!interrupted);
         }
 
         // 先结算上一次再算目标：否则连点两下时，第二下拿的还是旧的 panelCursor，
@@ -2137,52 +2227,49 @@
 
         // 翻到第 idx 块。这里只改一个 transform——轨道上所有月份早就画好了，
         // 动画期间和结束时都不碰 DOM，收尾只更新标题和两个按钮的状态
-        function slideToIndex(idx, ms) {
-            finalizeSlide();
+        function slideToIndex(idx) {
+            const fromX = currentTrackX();     // 同样要在结算之前取
+            finalizeSlide(true);
             if (idx === dpIndex) return;
+            settleTo(idx, fromX, 0);
+        }
+
+        // 从当前真实位置 fromX、带着速度 velocity，弹到第 idx 页。
+        // 按钮翻月和手势落位走的是同一条路，手感才一致
+        function settleTo(idx, fromX, velocity) {
             const track = document.getElementById("dp-track");
-            const dur = ms || DP_SLIDE_MS;
+            const toX = trackRestX(idx);
             const prevIdx = dpIndex;
             dpIndex = idx;
             panelCursor = new Date(dpMonths[idx].getFullYear(), dpMonths[idx].getMonth(), 1);
-            // 标题留到落定再换：滑动途中屏幕上主要还是旧的那个月
-            const settle = () => {
-                dpSliding = false;
+
+            const settle = (interrupted) => {
                 track.classList.remove("is-sliding");
                 track.style.transitionDuration = "";
-                updatePanelChrome();
-                // inert 改一次要重算整块 42 个格子的焦点树（实测 27ms），而它只影响
-                // 键盘 Tab 和读屏，晚一帧完全无感——落定那一帧就别背这个成本了
-                requestAnimationFrame(() => updatePaneInert(prevIdx));
+                track.style.transitionTimingFunction = "";
+                if (!interrupted) setTrackX(toX);      // 被打断时保持当前视觉位置
+                if (prevIdx !== idx) {
+                    updatePanelChrome();
+                    // inert 改一次要重算整块 42 格的焦点树（实测 27ms），
+                    // 它只影响键盘 Tab 和读屏，晚一帧完全无感
+                    requestAnimationFrame(() => updatePaneInert(prevIdx));
+                }
             };
-            if (prefersReducedMotion()) {       // 系统开了"减弱动效"就直接到位，不做动画
-                track.classList.remove("is-sliding");
-                setTrackX(trackRestX(idx));
-                settle();
+
+            if (prefersReducedMotion()) {              // 系统开了"减弱动效"就直接到位
+                dpSliding = false;
+                setTrackX(toX);
+                settle(false);
                 return;
             }
-            track.style.transitionDuration = dur + "ms";
+            const spring = springCurve(fromX - toX, velocity);
+            track.style.transitionDuration = spring.ms + "ms";
+            track.style.transitionTimingFunction = spring.easing;
             track.classList.add("is-sliding");
-            setTrackX(trackRestX(idx));
+            setTrackX(toX);
             dpSliding = true;
             dpSlideDone = settle;
-            dpSlideTimer = setTimeout(finalizeSlide, dur);
-        }
-
-        // 松手没到阈值时弹回当前这块
-        function snapBackTrack(ms) {
-            const track = document.getElementById("dp-track");
-            const dur = ms || DP_SLIDE_MS;
-            track.style.transitionDuration = dur + "ms";
-            track.classList.add("is-sliding");
-            setTrackX(trackRestX(dpIndex));
-            dpSliding = true;
-            dpSlideDone = () => {
-                dpSliding = false;
-                track.classList.remove("is-sliding");
-                track.style.transitionDuration = "";
-            };
-            dpSlideTimer = setTimeout(finalizeSlide, dur);
+            dpSlideTimer = setTimeout(() => finalizeSlide(false), spring.ms + 20);
         }
 
         // 选中某一天：更新按钮文字、跳到那一周、点亮那一天
@@ -2467,25 +2554,16 @@
             // 手机上左右拖动切换月份：手指跟手推动整条 track，松手时超过阈值就翻页、
             // 不够就原样弹回来。上/下月两块平时就画好了，所以拖到一半能同时看见两个月，
             // 而不是松手之后整块"啪"地换掉。
-            let dragX = 0, dragY = 0, dragW = 1, dragRestX = 0, dragShift = 0;
-            let dragStartT = 0, dragLastX = 0, dragLastT = 0, dragVel = 0;
+            let dragX = 0, dragY = 0, dragW = 1, dragBaseX = 0, dragPos = 0;
+            let dragLastX = 0, dragLastT = 0, dragVel = 0;
             let dragOn = false;        // 手指按下了，还没判断出方向
             let dragLocked = false;    // 已经判定为横向手势，正在接管
             // 刚翻过页的标记：手指在日期格上横扫，抬起时浏览器可能补一个 click，
             // 不挡住的话会顺手把那天选中、面板还跟着关了
             let justSwiped = false;
 
-            // 那个方向还有没有块可翻（学期首/末月就到头了）
-            function canShiftMonth(dir) {
-                return dpIndex + dir >= 0 && dpIndex + dir < dpMonths.length;
-            }
-
-            function finishDrag(commit, dir, ms) {
-                dragOn = false;
-                dragLocked = false;
-                if (commit) slideToIndex(dpIndex + dir, ms);
-                else snapBackTrack(ms);     // 弹回途中再按下也能接管
-            }
+            // 轨道能停的范围：第一页在 0，最后一页在 -(n-1)*一屏宽
+            function trackMinX() { return trackRestX(dpMonths.length - 1); }
 
             datePanel.addEventListener("touchstart", (e) => {
                 dragOn = false;
@@ -2497,14 +2575,19 @@
                 // 别和它抢——抢不过，而且会两边都触发
                 const edge = 28;
                 if (x < edge || x > document.documentElement.clientWidth - edge) return;
-                finalizeSlide();     // 上一次还在动就先结算，接着这一次滑，中间不留死区
+                // 动画跑到一半被抓住：先取当前视觉位置（此刻还在动，必须问浏览器要），
+                // 再结算逻辑状态，最后把轨道钉在那个位置接着走。
+                // 顺序不能反——finalizeSlide 会把 dpSliding 置 false，之后就读不到中间态了。
+                // 这就是 Apple 说的"随时可以抓住、并且从眼下这一帧继续"
+                const visualX = currentTrackX();
+                finalizeSlide(true);
+                dragBaseX = freezeTrack(visualX);
+                dragPos = dragBaseX;
                 dragX = dragLastX = x;
                 dragY = e.touches[0].clientY;
-                dragStartT = dragLastT = e.timeStamp || Date.now();
+                dragLastT = e.timeStamp || Date.now();
                 dragVel = 0;
-                dragShift = 0;
                 dragW = document.getElementById("dp-viewport").clientWidth || 1;
-                dragRestX = trackRestX(dpIndex);
                 dragOn = true;
             }, { passive: true });
 
@@ -2517,19 +2600,14 @@
                 const dx = x - dragX;
                 const dy = e.touches[0].clientY - dragY;
                 if (!dragLocked) {
-                    // 动够 5px 才表态；用夹角判方向而不是简单比 dx/dy 大小——
-                    // 斜着 44° 划也该算横滑，这是 Swiper 的 touchAngle 判定
-                    if (dx * dx + dy * dy < DP_LOCK_DIST2) return;
+                    if (dx * dx + dy * dy < DP_LOCK_DIST2) return;            // 还没动够 5px
                     if (!isHorizontalSwipe(dx, dy)) { dragOn = false; return; }   // 更像竖划：让给页面滚动
                     dragLocked = true;
-                    const track = document.getElementById("dp-track");
-                    track.classList.remove("is-sliding");
-                    track.style.transitionDuration = "";
                 }
                 e.preventDefault();
 
                 // 速度只看最近一小段并做平滑：整段平均会被"先慢后甩"的手势拉低，
-                // 单点采样又太抖。松手时用它决定要不要翻页、以及落位要多快
+                // 单点采样又太抖。松手时拿它做动量投影和弹簧的初速度
                 const t = e.timeStamp || Date.now();
                 const dt = t - dragLastT;
                 if (dt > 0) {
@@ -2538,38 +2616,35 @@
                     dragLastT = t;
                 }
 
-                const dir = dx < 0 ? 1 : -1;
-                const ok = canShiftMonth(dir);
-                // 到头了还硬拖：给个 0.28 的阻尼，拖得动但明显拉不开，等于告诉你没有下一个月了
-                let shift = ok ? dx : dx * 0.28;
-                dragShift = Math.max(-dragW, Math.min(dragW, shift));
-                // 同步写，不经过 requestAnimationFrame——排队到下一帧就是白白慢半拍，
-                // 手指移动事件本来就是按帧来的。Swiper 的 onTouchMove 末尾也是直接 setTranslate
-                setTrackX(dragRestX + dragShift);
+                // 越界就走 iOS 的橡皮筋：拉得越远越紧，而且始终在跟着你，
+                // 不是撞上一堵墙。两端统一处理，不用再分方向判断
+                let pos = dragBaseX + dx;
+                const minX = trackMinX();
+                if (pos > 0) pos = rubberBand(pos, dragW);
+                else if (pos < minX) pos = minX + rubberBand(pos - minX, dragW);
+                dragPos = pos;
+                // 同步写，不经过 requestAnimationFrame——排队到下一帧就是白白慢半拍
+                setTrackX(pos);
             }, { passive: false });
 
             datePanel.addEventListener("touchend", (e) => {
                 if (!dragOn) return;
                 if (!dragLocked) { dragOn = false; return; }     // 全程没横滑，当普通点击放过
-                const dx = e.changedTouches[0].clientX - dragX;
-                const dir = dx < 0 ? 1 : -1;   // 手指往左推 = 看下个月
-                const elapsed = (e.timeStamp || Date.now()) - dragStartT;
-                const speed = Math.abs(dragVel);          // px/ms
-
-                const commit = shouldCommitSwipe(dx, elapsed, speed, dragW) && canShiftMonth(dir);
-                const remain = commit
-                    ? Math.max(0, dragW - Math.abs(dragShift))
-                    : Math.abs(dragShift);
-                const ms = settleDuration(remain, speed);
-
+                dragOn = false;
+                dragLocked = false;
                 justSwiped = true;
                 setTimeout(() => { justSwiped = false; }, 350);
-                finishDrag(commit, dir, ms);
+                // 落到哪一页由动量投影决定；落位动画带上松手瞬间的速度
+                const target = projectLanding(dragPos, dragVel, dragW, dpIndex, dpMonths.length);
+                settleTo(target, dragPos, dragVel);
             }, { passive: true });
 
-            // 手势被系统打断（来电话、多指、边缘手势抢走）时别把 track 卡在半路
+            // 手势被系统打断（来电话、多指、边缘手势抢走）时别把轨道卡在半路
             datePanel.addEventListener("touchcancel", () => {
-                if (dragLocked) finishDrag(false, 0, DP_SLIDE_MS); else dragOn = false;
+                if (!dragLocked) { dragOn = false; return; }
+                dragOn = false;
+                dragLocked = false;
+                settleTo(dpIndex, dragPos, 0);
             }, { passive: true });
 
             // 翻完页那一下补出来的 click，在冒泡到日期格/外部关闭之前就拦下来
