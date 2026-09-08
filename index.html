@@ -1948,21 +1948,59 @@
         // 没在跑动画的时候直接用记着的值——getComputedStyle 会强制刷一次样式，
         // 而它正好落在 touchstart 这条关键路径上，实测会白白吃掉一帧
         function currentTrackX() {
-            if (!dpSliding) return dpTrackX;
+            if (!dpAnim && !dpSliding) return dpTrackX;
             return new DOMMatrixReadOnly(
                 getComputedStyle(document.getElementById("dp-track")).transform).m41;
+        }
+
+        let dpAnim = null;      // 正在跑的轨道动画（Web Animations API）
+
+        // 落位动画用 WAAPI 逐关键帧播，而不是给 transition 挂一条 linear() 缓动。
+        // 原因在 WebKit 源码 KeyframeEffect.cpp：
+        //   if (m_someKeyframesUseLinearTimingFunctionWithPoints || isLinearTimingFunctionWithPoints(...))
+        //       return false;   // 不能加速
+        // 也就是带点的 linear() 会让 Safari 把动画踢回主线程跑（除非开了还在实验阶段的
+        // threadedTimeBasedAnimations）。而"很多关键帧 + 每段普通 linear"视觉上完全等价、
+        // 又不触发这条规则，两个引擎上都留在合成器。
+        function startTrackAnimation(fromX, toX, spring) {
+            const track = document.getElementById("dp-track");
+            stopTrackAnimation();
+            if (!spring.pts || !track.animate) {
+                // 兜底：老浏览器没有 WAAPI，就退回 CSS 过渡
+                track.style.transitionDuration = spring.ms + "ms";
+                track.style.transitionTimingFunction = spring.easing;
+                track.classList.add("is-sliding");
+                setTrackX(toX);
+                return;
+            }
+            dpTrackX = toX;     // 动画播完就停在这儿
+            dpAnim = track.animate(
+                spring.pts.map((p, i) => ({
+                    offset: i / (spring.pts.length - 1),
+                    transform: "translate3d(" + (fromX + (toX - fromX) * p) + "px, 0, 0)",
+                })),
+                { duration: spring.ms, easing: "linear", fill: "both" }
+            );
+            track.classList.add("is-sliding");   // 只作状态标记，方便外部观察
+        }
+
+        // finalX 给了就落在那儿；不给表示"被打断"，就地停在当前视觉位置
+        function stopTrackAnimation(finalX) {
+            const track = document.getElementById("dp-track");
+            const x = (finalX === undefined) ? (dpAnim ? currentTrackX() : dpTrackX) : finalX;
+            if (dpAnim) { dpAnim.cancel(); dpAnim = null; }
+            track.classList.remove("is-sliding");
+            track.style.transitionDuration = "";
+            track.style.transitionTimingFunction = "";
+            setTrackX(x);
+            return x;
         }
 
         // 把正在跑的动画就地停住，停在当前视觉位置。
         // Apple 那条"motion must start from the current on-screen value"——
         // 中途被手抓住时不能瞬移回某一页的静止位，那是最出戏的一下
         function freezeTrack(x) {
-            const track = document.getElementById("dp-track");
-            track.classList.remove("is-sliding");
-            track.style.transitionDuration = "";
-            track.style.transitionTimingFunction = "";
-            setTrackX(x);
-            return x;
+            return stopTrackAnimation(x);
         }
 
         // 只有当前这块参与焦点和点击，其余用 inert 挡掉。翻页时只动变化的那两块
@@ -2061,9 +2099,7 @@
             // 每次打开都回到选中那天所在的月，而不是停在上次翻到哪
             dpIndex = monthSlot(selectedDate);
             panelCursor = new Date(dpMonths[dpIndex].getFullYear(), dpMonths[dpIndex].getMonth(), 1);
-            const track = document.getElementById("dp-track");
-            track.classList.remove("is-sliding");
-            setTrackX(trackRestX(dpIndex));
+            stopTrackAnimation(trackRestX(dpIndex));   // 顺手把上次残留的动画取消掉
             refreshMarks();
             updatePanelChrome();
             updatePaneInert(-1);
@@ -2159,7 +2195,7 @@
         // 把一条带初速度的弹簧曲线采样成 CSS 的 linear() 缓动串。
         // distance = 起点减终点（px）；velocity = 松手速度（px/ms，与轨道坐标同向）
         function springCurve(distance, velocity) {
-            const fallback = { ms: DP_SLIDE_MS, easing: "cubic-bezier(0.05, 0.7, 0.1, 1)" };
+            const fallback = { ms: DP_SLIDE_MS, pts: null, easing: "cubic-bezier(0.05, 0.7, 0.1, 1)" };
             if (!distance || !DP_HAS_LINEAR) return fallback;
             const w0 = 2 * Math.PI / DP_SPRING_RESPONSE;      // 无阻尼固有频率 rad/s
             const z = DP_SPRING_DAMPING;
@@ -2199,6 +2235,7 @@
             pts[pts.length - 1] = 1;                          // 最后一点钉死，保证精确落位
             return {
                 ms: Math.round(Math.max(120, (pts.length - 1) * step * 1000)),
+                pts: pts,
                 easing: "linear(" + pts.map(n => n.toFixed(4)).join(",") + ")",
             };
         }
@@ -2253,10 +2290,8 @@
             panelCursor = new Date(dpMonths[idx].getFullYear(), dpMonths[idx].getMonth(), 1);
 
             const settle = (interrupted) => {
-                track.classList.remove("is-sliding");
-                track.style.transitionDuration = "";
-                track.style.transitionTimingFunction = "";
-                if (!interrupted) setTrackX(toX);      // 被打断时保持当前视觉位置
+                // 被打断时不传 finalX，就地停在当前视觉位置
+                if (interrupted) stopTrackAnimation(); else stopTrackAnimation(toX);
                 if (prevIdx !== idx) {
                     updatePanelChrome();
                     // inert 改一次要重算整块 42 格的焦点树（实测 27ms），
@@ -2267,15 +2302,11 @@
 
             if (prefersReducedMotion()) {              // 系统开了"减弱动效"就直接到位
                 dpSliding = false;
-                setTrackX(toX);
                 settle(false);
                 return;
             }
             const spring = springCurve(fromX - toX, velocity);
-            track.style.transitionDuration = spring.ms + "ms";
-            track.style.transitionTimingFunction = spring.easing;
-            track.classList.add("is-sliding");
-            setTrackX(toX);
+            startTrackAnimation(fromX, toX, spring);
             dpSliding = true;
             dpSlideDone = settle;
             dpSlideTimer = setTimeout(() => finalizeSlide(false), spring.ms + 20);
@@ -2541,9 +2572,8 @@
             // 轨道位移是按像素算的，转屏/改窗口宽度后要重新摆位，否则会停在两块中间
             window.addEventListener("resize", () => {
                 if (!dpBuilt || !isDatePanelOpen()) return;
-                const track = document.getElementById("dp-track");
-                track.classList.remove("is-sliding");
-                setTrackX(trackRestX(dpIndex));
+                finalizeSlide(true);
+                stopTrackAnimation(trackRestX(dpIndex));
             });
             document.getElementById("dp-prev").addEventListener("click", () => shiftPanelMonth(-1));
             document.getElementById("dp-next").addEventListener("click", () => shiftPanelMonth(1));
