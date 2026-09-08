@@ -2120,6 +2120,13 @@
         const DP_SLIDE_MS = 300;          // 兜底时长（浏览器不支持 linear() 时用）
         const DP_SLIDE_MAX_MS = 620;
 
+        // 弹簧曲线的采样率。这条很关键：linear() 在采样点之间是**线性插值**的，
+        // 按 60Hz 采样的话，120Hz 屏上每个采样段要撑 2 帧、段内速度恒定——
+        // 等于速度分辨率只有 60 次/秒，在高刷屏上看着就是 60fps。
+        // 按 240Hz 采样，到 240Hz 的屏幕都够用，代价只是曲线串长一点
+        const DP_SPRING_HZ = 240;
+        const DP_SPRING_MAX_PTS = 180;
+
         // 浏览器支不支持 linear() 缓动（CSS Easing Level 2，2023-12 起 Baseline）。
         // 支持就能把弹簧曲线采样成缓动函数，动画仍是一条普通 transform 过渡、照样跑在合成器上
         const DP_HAS_LINEAR = typeof CSS !== "undefined" && CSS.supports
@@ -2157,13 +2164,15 @@
             const w0 = 2 * Math.PI / DP_SPRING_RESPONSE;      // 无阻尼固有频率 rad/s
             const z = DP_SPRING_DAMPING;
             const wd = w0 * Math.sqrt(1 - z * z);             // 阻尼后的频率
-            const step = 1 / 60;                              // 按 60fps 采样
+            const step = 1 / DP_SPRING_HZ;
 
             // 按给定的归一化初速度采一条曲线出来
             const sample = (v0) => {
                 const B = (v0 + z * w0) / wd;
                 const out = [];
-                for (let t = 0; t < DP_SLIDE_MAX_MS / 1000; t += step) {
+                for (let i = 0; i < DP_SPRING_MAX_PTS; i++) {
+                    const t = i * step;
+                    if (t >= DP_SLIDE_MAX_MS / 1000) break;
                     const u = Math.exp(-z * w0 * t) * (Math.cos(wd * t) + B * Math.sin(wd * t));
                     out.push(1 - u);
                     if (t > 0.1 && Math.abs(u) < 0.002) break;   // 已经贴到目标就收尾
