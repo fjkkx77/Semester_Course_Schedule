@@ -50,6 +50,10 @@
             --makeup-head-bg: #CFFAFE;
             --makeup-cell-bg: rgba(6, 182, 212, 0.06);
             --makeup-accent: #0E7490;
+            --cancelled-card-bg: #F3F4F6;
+            --cancelled-card-border: #E5E7EB;
+            --cancelled-accent: #9CA3AF;
+            --cancelled-name: #5B6573;   /* 比 --text-light 深一档：灰底上要过 AA 4.5:1 */
             --next-bar-hover-bg: #E0E7FF;
             --next-bar-ongoing-hover-bg: #D7F5E8;
             --flash-ring: rgba(79, 70, 229, 0.9);
@@ -95,6 +99,10 @@
                 --makeup-head-bg: #123B45;
                 --makeup-cell-bg: rgba(34, 211, 238, 0.10);
                 --makeup-accent: #67E8F9;
+                --cancelled-card-bg: rgba(148, 163, 184, 0.10);
+                --cancelled-card-border: #33415C;
+                --cancelled-accent: #64748B;
+                --cancelled-name: #94A3B8;   /* 深色下 --text-light 本身已是 4.76:1，够 */
                 --next-bar-hover-bg: rgba(129, 140, 248, 0.20);
                 --next-bar-ongoing-hover-bg: rgba(52, 211, 153, 0.20);
                 --flash-ring: rgba(129, 140, 248, 0.95);
@@ -628,6 +636,48 @@
         }
         .course-swap-note svg,
         .mobile-course-swap-note svg { flex: 0 0 auto; }
+
+        /* 放假日仍然把原本该上的课列出来、划掉——这样一眼看得出假期影响了哪几门课。
+           它们只是"给人看"的，不参与任何计数/提醒逻辑（见 JS 里 list 与 cancelled 的分工） */
+        .course-card.is-cancelled,
+        .mobile-course-card.is-cancelled {
+            background-color: var(--cancelled-card-bg);
+            border-color: var(--cancelled-card-border);
+            border-left-color: var(--cancelled-accent);
+            box-shadow: none;
+        }
+        .course-card.is-cancelled .course-name,
+        .mobile-course-card.is-cancelled .mobile-course-name {
+            color: var(--cancelled-name);
+            text-decoration: line-through;
+            text-decoration-thickness: 1.5px;
+        }
+        .course-card.is-cancelled .course-time,
+        .mobile-course-card.is-cancelled .mobile-course-time,
+        .course-card.is-cancelled .course-info,
+        .mobile-course-card.is-cancelled .mobile-course-info {
+            color: var(--text-light);
+        }
+        @media (hover: hover) and (pointer: fine) {
+            /* 停掉的课不该有"可点"的暗示 */
+            .course-card.is-cancelled:hover { transform: none; box-shadow: none; }
+        }
+        /* 卡片顶上那行「假期停课」/「已调至 9/20(周日)」 */
+        .course-cancel-note {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            line-height: 1.35;
+            margin-bottom: 5px;
+        }
+        .course-cancel-note svg { flex: 0 0 auto; }
+        .course-cancel-note.is-stop { color: var(--holiday-accent); }
+        .course-cancel-note.is-moved { color: var(--makeup-accent); }
+        /* 移动端：放假横幅下面接着列被停的课，横幅就不用占那么大块了 */
+        .day-block.is-holiday .day-holiday { padding-bottom: 6px; }
+        .day-block-header .count.is-cancelled { color: var(--holiday-accent); }
 
         /* ===== 「下一节课」提示条 ===== */
         .next-class-bar {
@@ -1763,6 +1813,12 @@
         // 返回 { list, holiday, makeupFrom }：
         //   holiday    非空 => 这天放假，list 必为空
         //   makeupFrom 非空 => 这天上的是那一天(Date)的课
+        // 返回 { list, cancelled, holiday, makeupFrom, movedTo }：
+        //   list       这天【真的要去上】的课。计数、「下一节课」、日历圆点只认它。
+        //   cancelled  这天【原本该上、被假期停掉】的课。只用来显示（划掉），不参与任何逻辑。
+        //   holiday    非空 => 这天放假
+        //   makeupFrom 非空 => 这天上的是那一天(Date)的课
+        //   movedTo    非空 => 这天被停的课已调到那一天(Date)去上，而不是白白取消
         function resolveDay(week, dayIndex) {
             const date = dateOfWeekDay(week, dayIndex);
 
@@ -1777,13 +1833,36 @@
                 const list = srcWeek === null
                     ? []
                     : courses.filter(c => courseOnDay(c, srcWeek, srcDay));
-                return { list: list, holiday: null, makeupFrom: src };
+                return { list: list, cancelled: [], holiday: null, makeupFrom: src, movedTo: null };
             }
 
             const holiday = findHoliday(date);
-            if (holiday) return { list: [], holiday: holiday, makeupFrom: null };
+            if (holiday) {
+                // 放假也把原本的课列出来（用户 2026-09-09 提的：想知道假期影响了哪几门）。
+                // 注意它进的是 cancelled 不是 list——放进 list 就会被当成真有课，
+                // 「下一节课」又会喊你去上一节已经放掉的课了。
+                const cancelled = courses.filter(c => courseOnDay(c, week, dayIndex));
+                // 这天的课是被"调走"了，还是就地取消？查有没有别的日子来接它
+                const moved = MAKEUP_DAYS.find(m => m.follows === ymd(date));
+                return {
+                    list: [], cancelled: cancelled, holiday: holiday, makeupFrom: null,
+                    movedTo: moved ? parseYMD(moved.date) : null
+                };
+            }
 
-            return { list: courses.filter(c => courseOnDay(c, week, dayIndex)), holiday: null, makeupFrom: null };
+            return {
+                list: courses.filter(c => courseOnDay(c, week, dayIndex)),
+                cancelled: [], holiday: null, makeupFrom: null, movedTo: null
+            };
+        }
+
+        // 被假期停掉的课，卡片顶上那行说明。桌面和移动端共用同一句，别各写各的。
+        // 课被调走了就说清楚调到哪天；就地停的只写"停课"两个字——
+        // 假期名字已经由表头那面旗（和移动端横幅）承担了，卡片再重复一遍太吵。
+        function cancelNoteHTML(info) {
+            return info.movedTo
+                ? `<div class="course-cancel-note is-moved"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>已调至 ${makeupSourceLabel(info.movedTo)}</div>`
+                : `<div class="course-cancel-note is-stop"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"></line></svg>停课</div>`;
         }
 
         // 从今天此刻往后找第一门还没结束的课，最多找 14 天（够跨过实训周里的空档）
@@ -3002,6 +3081,9 @@
 
             tbody.innerHTML = "";
             let totalCoursesThisWeek = 0;
+            // 单独数被停的课：整周全是假期时，表格里仍有停课卡要给人看，
+            // 不能因为"真课数=0"就落进"本周无排课"的空状态
+            const totalCancelledThisWeek = dayInfos.slice(1).reduce((n, i) => n + i.cancelled.length, 0);
             
             timeSlots.forEach(slot => {
                 const tr = document.createElement("tr");
@@ -3022,20 +3104,28 @@
                     const info = dayInfos[dayIndex];
                     if (info.holiday) td.classList.add("holiday-col");
                     if (info.makeupFrom) td.classList.add("makeup-col");
+                    // 真要上的课 + 被假期停掉的课。后者只是显示，计数只算前者
                     const cellCourses = info.list.filter(c => c.time === slot.id);
-                    
-                    if (cellCourses.length > 0) {
-                        totalCoursesThisWeek += cellCourses.length;
-                        rowCourseCount += cellCourses.length;
-                    }
-                    
-                    cellCourses.forEach(c => {
+                    const cellCancelled = info.cancelled.filter(c => c.time === slot.id);
+
+                    totalCoursesThisWeek += cellCourses.length;
+                    // 只有停课卡的行也得留着，否则整行被折叠掉就白显示了
+                    rowCourseCount += cellCourses.length + cellCancelled.length;
+
+                    const paint = (c, isCancelled) => {
                         const div = document.createElement("div");
-                        div.className = "course-card" + (c.type === "practical" ? " practical" : "");
-                        // 用 courses 里的下标当锚点，「下一节课」提示条靠它把卡片找回来
-                        div.dataset.courseIdx = courses.indexOf(c);
-                        div.dataset.dayIdx = dayIndex;
+                        div.className = "course-card"
+                            + (c.type === "practical" ? " practical" : "")
+                            + (isCancelled ? " is-cancelled" : "");
+                        // 用 courses 里的下标当锚点，「下一节课」提示条靠它把卡片找回来。
+                        // 停课卡不给锚点：它不是真课，不该被提示条滚过去。
+                        if (!isCancelled) {
+                            div.dataset.courseIdx = courses.indexOf(c);
+                            div.dataset.dayIdx = dayIndex;
+                        }
+                        const place = (c.building && !c.room.startsWith(c.building)) ? c.building + " " + c.room : c.room;
                         div.innerHTML = `
+                            ${isCancelled ? cancelNoteHTML(info) : ""}
                             <div class="course-name" title="${c.name}">${c.name}</div>
                             ${c.realTime ? `<div class="course-time">⏱ ${c.realTime}</div>` : ""}
                             ${c.timeNote ? `<div class="course-time-note">${c.timeNote}</div>` : ""}
@@ -3046,12 +3136,15 @@
                             </div>
                             <div class="course-info">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                <span class="info-text" title="${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}">${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}</span>
+                                <span class="info-text" title="${place}">${place}</span>
                             </div>
                         `;
                         td.appendChild(div);
-                    });
-                    
+                    };
+
+                    cellCourses.forEach(c => paint(c, false));
+                    cellCancelled.forEach(c => paint(c, true));
+
                     tr.appendChild(td);
                 }
                 
@@ -3063,7 +3156,7 @@
             });
 
             // 状态控制
-            if (totalCoursesThisWeek === 0) {
+            if (totalCoursesThisWeek === 0 && totalCancelledThisWeek === 0) {
                 table.style.display = "none";
                 emptyState.style.display = "block";
             } else {
@@ -3081,9 +3174,9 @@
 
             for (let dayIndex = 1; dayIndex <= 7; dayIndex++) {
                 const info = dayInfos[dayIndex];
-                const dayCourses = info.list
-                    .slice()
-                    .sort((a, b) => periodMeta[a.time].order - periodMeta[b.time].order);
+                const byPeriod = (a, b) => periodMeta[a.time].order - periodMeta[b.time].order;
+                const dayCourses = info.list.slice().sort(byPeriod);
+                const dayCancelled = info.cancelled.slice().sort(byPeriod);
 
                 const isToday = shouldMarkToday(week) && dayIndex === todayDayIndex;
 
@@ -3098,15 +3191,54 @@
                 const dayFlag = info.holiday
                     ? `<span class="day-flag holiday-flag">${info.holiday.name}</span>`
                     : (info.makeupFrom ? `<span class="day-flag makeup-flag">调 ${makeupSourceLabel(info.makeupFrom)}</span>` : "");
-                header.innerHTML = `<span>${days[dayIndex - 1]}<span class="day-date">${shortDate(dateOfWeekDay(week, dayIndex))}</span>${isToday ? '<span class="today-badge">今日</span>' : ""}${dayFlag}</span><span class="count">${dayCourses.length > 0 ? dayCourses.length + " 项" : ""}</span>`;
+                // 放假日的"N 项"要说明是停课，不然看着像那天还有课
+                const countText = dayCourses.length > 0
+                    ? dayCourses.length + " 项"
+                    : (dayCancelled.length > 0 ? dayCancelled.length + " 项停课" : "");
+                const countCls = "count" + (dayCourses.length === 0 && dayCancelled.length > 0 ? " is-cancelled" : "");
+                header.innerHTML = `<span>${days[dayIndex - 1]}<span class="day-date">${shortDate(dateOfWeekDay(week, dayIndex))}</span>${isToday ? '<span class="today-badge">今日</span>' : ""}${dayFlag}</span><span class="${countCls}">${countText}</span>`;
                 block.appendChild(header);
 
                 const body = document.createElement("div");
                 body.className = "day-block-body";
 
+                // 一张移动端课程卡。真课和停课卡只差一个 isCancelled，别写两份
+                const makeMobileCard = (c, isCancelled) => {
+                    const meta = periodMeta[c.time];
+                    const card = document.createElement("div");
+                    card.className = "mobile-course-card"
+                        + (c.type === "practical" ? " practical" : "")
+                        + (isCancelled ? " is-cancelled" : "");
+                    // 停课卡不给锚点：它不是真课，「下一节课」不该滚到它身上
+                    if (!isCancelled) {
+                        card.dataset.courseIdx = courses.indexOf(c);
+                        card.dataset.dayIdx = dayIndex;
+                    }
+                    card.innerHTML = `
+                        ${isCancelled ? cancelNoteHTML(info) : ""}
+                        <div class="mobile-course-time">${meta.label} · ${c.realTime || meta.time}</div>
+                        <div class="mobile-course-name">${c.name}</div>
+                        ${info.makeupFrom ? `<div class="mobile-course-swap-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>调 ${makeupSourceLabel(info.makeupFrom)} 的课</div>` : ""}
+                        <div class="mobile-course-info">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            ${c.teacher}
+                        </div>
+                        <div class="mobile-course-info">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            ${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}
+                        </div>
+                        ${c.timeNote ? `<div class="mobile-course-time-note">${c.timeNote}</div>` : ""}
+                    `;
+                    return card;
+                };
+
                 if (info.holiday) {
-                    // 放假单列一种状态：空白 + "这天没有排课"会让人以为是数据缺了
-                    body.innerHTML = `<div class="day-holiday"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg><span>${info.holiday.name}</span></div>`;
+                    // 有停课卡时不再出横幅：表头那面旗已经写了假期名，再来一条就是第三遍。
+                    // 只有本来就没课的假期日（如 9/26 周六）才需要横幅，否则整块空白像数据缺了。
+                    body.innerHTML = dayCancelled.length ? ""
+                        : `<div class="day-holiday"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg><span>${info.holiday.name}</span></div>`;
+                    // 把原本该上的课列出来（划掉），好知道假期影响了哪几门
+                    dayCancelled.forEach(c => body.appendChild(makeMobileCard(c, true)));
                 } else if (dayCourses.length === 0) {
                     // 周末和工作日的"没课"是两种心情，文案分开写
                     const emptyIcon = dayIndex >= 6
@@ -3115,28 +3247,7 @@
                     const emptyText = dayIndex >= 6 ? "周末休息，好好放松" : "这天没有排课";
                     body.innerHTML = `<div class="day-empty">${emptyIcon}<span>${emptyText}</span></div>`;
                 } else {
-                    dayCourses.forEach(c => {
-                        const meta = periodMeta[c.time];
-                        const card = document.createElement("div");
-                        card.className = "mobile-course-card" + (c.type === "practical" ? " practical" : "");
-                        card.dataset.courseIdx = courses.indexOf(c);
-                        card.dataset.dayIdx = dayIndex;
-                        card.innerHTML = `
-                            <div class="mobile-course-time">${meta.label} · ${c.realTime || meta.time}</div>
-                            <div class="mobile-course-name">${c.name}</div>
-                            ${info.makeupFrom ? `<div class="mobile-course-swap-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>调 ${makeupSourceLabel(info.makeupFrom)} 的课</div>` : ""}
-                            <div class="mobile-course-info">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                                ${c.teacher}
-                            </div>
-                            <div class="mobile-course-info">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                ${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}
-                            </div>
-                            ${c.timeNote ? `<div class="mobile-course-time-note">${c.timeNote}</div>` : ""}
-                        `;
-                        body.appendChild(card);
-                    });
+                    dayCourses.forEach(c => body.appendChild(makeMobileCard(c, false)));
                 }
 
                 block.appendChild(body);
