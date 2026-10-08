@@ -872,13 +872,28 @@
             font-size: 0.8em;
             color: var(--slot-time-text);
         }
+        /* 卡片铺满格子：一行的高度由这一行最高的那张卡撑出来，其余卡片以前只有内容那么高、
+           贴在格子顶上，底下空一大块。现在每张卡都拉满整格，四周只剩 td 的 12px 内边距。
+           td 写 height:1px 是让子元素的 height:100% 能以"行高"为基准——表格单元格不写高度时，
+           百分比高度没有参照、算不出来；1px 只是个下限，行高照样由内容撑开。 */
+        #schedule-table td:not(.time-col) { height: 1px; }
+        .cell-stack {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;               /* 同一格里有两张卡（比如一张停课卡 + 一张真课）时平分高度 */
+        }
         .course-card {
             background-color: var(--theory-card-bg);
             border: 1px solid var(--theory-card-border);
             border-left: 4px solid var(--primary);
             border-radius: 6px;
             padding: 10px 8px;
-            margin-bottom: 8px;
+            flex: 1 1 auto;
+            /* 内容在卡片里上下居中 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             font-size: 0.875rem;
             text-align: left;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
@@ -892,6 +907,14 @@
                 box-shadow: 0 4px 6px rgba(0,0,0,0.08);
             }
         }
+        /* 内容块收窄到最长那行的宽度、在卡片里左右居中；块内文字仍左对齐，图标一列对齐。
+           最后一行的下外边距清零，否则底部比顶部多出 3~5px，上下就不对称了 */
+        .card-body {
+            width: fit-content;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        .card-body > :last-child { margin-bottom: 0; }
         /* 实训/课程设计采用不同的配色 */
         .course-card.practical {
             background-color: var(--practical-card-bg);
@@ -3124,7 +3147,7 @@
                             div.dataset.dayIdx = dayIndex;
                         }
                         const place = (c.building && !c.room.startsWith(c.building)) ? c.building + " " + c.room : c.room;
-                        div.innerHTML = `
+                        div.innerHTML = `<div class="card-body">
                             ${isCancelled ? cancelNoteHTML(info) : ""}
                             <div class="course-name" title="${c.name}">${c.name}</div>
                             ${c.realTime ? `<div class="course-time">⏱ ${c.realTime}</div>` : ""}
@@ -3138,12 +3161,16 @@
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                                 <span class="info-text" title="${place}">${place}</span>
                             </div>
-                        `;
-                        td.appendChild(div);
+                        </div>`;
+                        stack.appendChild(div);
                     };
 
+                    // 卡片放进 .cell-stack 里，由它把整格高度分给卡片（见 CSS .cell-stack）
+                    const stack = document.createElement("div");
+                    stack.className = "cell-stack";
                     cellCourses.forEach(c => paint(c, false));
                     cellCancelled.forEach(c => paint(c, true));
+                    td.appendChild(stack);
 
                     tr.appendChild(td);
                 }
