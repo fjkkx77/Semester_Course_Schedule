@@ -14,6 +14,9 @@
         :root {
             --primary: #4F46E5;
             --primary-hover: #4338CA;
+            /* 压在 --primary 实底上的字/图标色。浅色下白字 6.3:1；
+               深色下 --primary 提亮成 #818CF8，白字只剩 2.98:1，所以换成深色字 */
+            --on-primary: #FFFFFF;
             --bg: #F3F4F6;
             --card-bg: #FFFFFF;
             --text-main: #1F2937;
@@ -64,6 +67,7 @@
             :root {
                 --primary: #818CF8;
                 --primary-hover: #A5B4FC;
+                --on-primary: #0B1220;
                 --bg: #0B1220;
                 --card-bg: #131C2E;
                 --text-main: #E5E9F0;
@@ -194,7 +198,7 @@
             border: 1px solid var(--primary);
             border-radius: 8px;
             background: var(--primary);
-            color: #fff;
+            color: var(--on-primary);
             font-size: 0.85rem;
             font-weight: 600;
             cursor: pointer;
@@ -305,7 +309,7 @@
         .dp-month.is-current {
             border-color: var(--primary);
             background: var(--primary);
-            color: #fff;
+            color: var(--on-primary);
             font-weight: 700;
         }
         @media (hover: hover) {
@@ -421,7 +425,7 @@
         }
         .dp-day.is-selected {
             background: var(--primary);
-            color: #fff;
+            color: var(--on-primary);
             font-weight: 700;
             box-shadow: none;
         }
@@ -437,7 +441,7 @@
             border-radius: 50%;
             background: var(--primary);
         }
-        .dp-day.is-selected.has-class::after { background: #fff; }
+        .dp-day.is-selected.has-class::after { background: var(--on-primary); }
         .dp-day:disabled.has-class::after { display: none; }
         @media (hover: hover) {
             .dp-day:hover:not(:disabled):not(.is-selected) { background: var(--th-bg); }
@@ -467,8 +471,10 @@
             cursor: pointer;
             touch-action: manipulation;
         }
+        /* 今天不在学期内时（开学前/学期结束后）这个按钮无事可做，置灰而不是点了没反应 */
+        .dp-today:disabled { opacity: 0.4; cursor: default; }
         @media (hover: hover) {
-            .dp-today:hover { background: var(--primary); color: #fff; }
+            .dp-today:hover:not(:disabled) { background: var(--primary); color: var(--on-primary); }
         }
 
         /* 面板开合：弹出时往下弹一点，关闭时把同一段动画倒着放（reverse），
@@ -558,7 +564,7 @@
             padding: 1px 7px;
             border-radius: 999px;
             background: var(--primary);
-            color: #fff;
+            color: var(--on-primary);
             font-size: 0.68rem;
             font-weight: 700;
             letter-spacing: 0.05em;
@@ -657,10 +663,6 @@
         .course-card.is-cancelled .course-info,
         .mobile-course-card.is-cancelled .mobile-course-info {
             color: var(--text-light);
-        }
-        @media (hover: hover) and (pointer: fine) {
-            /* 停掉的课不该有"可点"的暗示 */
-            .course-card.is-cancelled:hover { transform: none; box-shadow: none; }
         }
         /* 卡片顶上那行「假期停课」/「已调至 9/20(周日)」 */
         .course-cancel-note {
@@ -897,15 +899,8 @@
             font-size: 0.875rem;
             text-align: left;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: transform 0.1s;
             touch-action: manipulation;
-        }
-        /* 悬停效果仅在支持精确指针（鼠标）的设备上生效，避免手机点按后出现"粘滞"高亮 */
-        @media (hover: hover) and (pointer: fine) {
-            .course-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 6px rgba(0,0,0,0.08);
-            }
+            /* 不做悬停上浮：卡片点了没有任何动作，上浮会暗示"能点"（2026-10-08 去掉） */
         }
         /* 内容块收窄到最长那行的宽度、在卡片里左右居中；块内文字仍左对齐，图标一列对齐。
            最后一行的下外边距清零，否则底部比顶部多出 3~5px，上下就不对称了 */
@@ -980,7 +975,7 @@
             gap: 6px;
             margin: 10px 0 0;
             padding: 8px 14px;
-            min-height: 40px;
+            min-height: 44px;
             border: 1px solid var(--primary);
             border-radius: 999px;
             background: transparent;
@@ -992,7 +987,7 @@
             touch-action: manipulation;
         }
         @media (hover: hover) {
-            .timesheet-open-btn:hover { background: var(--primary); color: #fff; }
+            .timesheet-open-btn:hover { background: var(--primary); color: var(--on-primary); }
         }
 
         /* ===== 作息表弹窗 ===== */
@@ -1199,7 +1194,7 @@
         }
         .mobile-view-toggle .toggle-btn {
             flex: 1;
-            min-height: 40px;
+            min-height: 44px;
             padding: 8px 0;
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -1212,7 +1207,7 @@
         }
         .mobile-view-toggle .toggle-btn.active {
             background: var(--primary);
-            color: #fff;
+            color: var(--on-primary);
             border-color: var(--primary);
         }
 
@@ -1284,10 +1279,13 @@
             color: var(--text-light);
             font-size: 0.82rem;
             display: flex;
-            align-items: center;
+            /* 跟电脑端 .course-info 一样：图标对齐第一行。center 的话名单一换行，
+               图标就掉到两行中间（320 宽下「郑宏云、刘彤…」实测踩到） */
+            align-items: flex-start;
             gap: 4px;
             margin-top: 2px;
         }
+        .mobile-course-info svg { flex-shrink: 0; margin-top: 3px; }
 
         /* 移动端适配（iOS / 安卓） */
         @media (max-width: 768px) {
@@ -1731,9 +1729,33 @@
             return raw === 0 ? 7 : raw;
         }
 
-        const todayDayIndex = getTodayDayIndex();
-        const realCurrentWeek = getRealCurrentWeek();
-        const semesterActive = isWithinSemester();
+        // 这三个"今天"相关的量不能只在打开页面时算一次：页面（尤其添加到主屏幕后）
+        // 常在后台挂好几天，过了午夜还停在昨天——"今日"标错列、「回到本周」回到上周。
+        // 由 refreshTodayState() 在每秒的计时里、以及切回前台时检查日期有没有变。
+        let todayDayIndex = getTodayDayIndex();
+        let realCurrentWeek = getRealCurrentWeek();
+        let semesterActive = isWithinSemester();
+        let todayKey = new Date().toDateString();
+
+        // 日期变了就重算并重画；没变什么都不做（每秒调用，开销只是一次字符串比较）
+        function refreshTodayState() {
+            const key = new Date().toDateString();
+            if (key === todayKey) return false;
+            todayKey = key;
+            todayDayIndex = getTodayDayIndex();
+            realCurrentWeek = getRealCurrentWeek();
+            semesterActive = isWithinSemester();
+            // 用户正在看第几周就还停在第几周，只把今日标记、按钮状态这些刷新掉
+            goToWeek(document.getElementById("week-select").value);
+            updateDpTodayBtn();
+            if (dpBuilt) refreshMarks();
+            return true;
+        }
+
+        // 日期面板里的「回到今天」：今天不在学期内就置灰
+        function updateDpTodayBtn() {
+            document.getElementById("dp-today").disabled = (weekOfDate(new Date()) === null);
+        }
 
         // 第 week 教学周的星期 dayIndex(1~7) 对应的真实日期
         function dateOfWeekDay(week, dayIndex) {
@@ -1833,9 +1855,6 @@
 
         // 【某一天到底上什么课】的唯一入口。桌面表格、移动端列表、「下一节课」提示条、
         // 日历小圆点全部走这里——这段逻辑以前散在 4 个地方各写各的，加覆盖层时必漏改。
-        // 返回 { list, holiday, makeupFrom }：
-        //   holiday    非空 => 这天放假，list 必为空
-        //   makeupFrom 非空 => 这天上的是那一天(Date)的课
         // 返回 { list, cancelled, holiday, makeupFrom, movedTo }：
         //   list       这天【真的要去上】的课。计数、「下一节课」、日历圆点只认它。
         //   cancelled  这天【原本该上、被假期停掉】的课。只用来显示（划掉），不参与任何逻辑。
@@ -2792,6 +2811,7 @@
             // iOS 原生日期选择器里没有"今天"快捷键（只能给个"还原"），
             // 想快速回到今天就靠这个按钮，所以它得把"今天在哪"也指出来。
             document.getElementById("btn-current-week").addEventListener("click", () => {
+                refreshTodayState();      // 后台挂过夜刚切回来、计时还没跑到时，先把"今天"对齐
                 goToWeek(realCurrentWeek);
                 if (semesterActive) {
                     highlightDay(todayDayIndex);
@@ -2951,9 +2971,10 @@
             datePanel.addEventListener("click", (e) => {
                 if (justSwiped) { e.stopPropagation(); e.preventDefault(); }
             }, true);
+            updateDpTodayBtn();
             document.getElementById("dp-today").addEventListener("click", () => {
                 const t = new Date();
-                if (weekOfDate(t) === null) return;   // 放假期间"回到今天"没有意义
+                if (weekOfDate(t) === null) return;   // 学期外"回到今天"没有意义（按钮已置灰，这里再挡一次）
                 selectDate(t);
                 closeDatePanel();
             });
@@ -3018,16 +3039,18 @@
             // 数据量很小（十几条课 × 最多 14 天），每秒跑一次开销可以忽略。
             // 注意：每次都是重新 new Date() 取当前时间算差值，不是拿初始值往下累减，
             // 所以页面开多久都不会累积误差；两台设备显示不一致只会是各自系统时钟不同步。
-            setInterval(renderNextClassBar, 1000);
+            // 同一个计时顺带检查日期有没有翻过午夜
+            const tick = () => { refreshTodayState(); renderNextClassBar(); };
+            setInterval(tick, 1000);
 
             // 页面切到后台时浏览器会节流甚至冻结 setInterval（手机上尤其明显：
             // 切到别的 App、锁屏、切标签页都会停）。回到前台那一刻要是等下一次 tick，
             // 会先闪一下冻结时的旧数字，所以这里主动补一次立即重算。
             document.addEventListener("visibilitychange", () => {
-                if (!document.hidden) renderNextClassBar();
+                if (!document.hidden) tick();
             });
             // iOS 从 bfcache 恢复（比如从别的页面点返回）不触发 load，只触发 pageshow
-            window.addEventListener("pageshow", renderNextClassBar);
+            window.addEventListener("pageshow", tick);
 
             setupPullToRefresh();
 
@@ -3108,7 +3131,16 @@
             // 不能因为"真课数=0"就落进"本周无排课"的空状态
             const totalCancelledThisWeek = dayInfos.slice(1).reduce((n, i) => n + i.cancelled.length, 0);
             
-            timeSlots.forEach(slot => {
+            // 有全天实训的周（9-18 周），"全天"那行挪到最上面：那几周它是唯一有内容的一行，
+            // 放在最底下得先划过 6 行空格子才看得到；移动端列表也是全天排最前，两边保持一致。
+            // 纯理论周它是空行，仍留在底部不抢位置
+            const hasFullDay = dayInfos.slice(1).some(i =>
+                i.list.some(c => c.time === "full") || i.cancelled.some(c => c.time === "full"));
+            const slotOrder = hasFullDay
+                ? timeSlots.filter(s => s.id === "full").concat(timeSlots.filter(s => s.id !== "full"))
+                : timeSlots;
+
+            slotOrder.forEach(slot => {
                 const tr = document.createElement("tr");
                 
                 const th = document.createElement("td");
@@ -3245,6 +3277,7 @@
                         ${isCancelled ? cancelNoteHTML(info) : ""}
                         <div class="mobile-course-time">${meta.label} · ${c.realTime || meta.time}</div>
                         <div class="mobile-course-name">${c.name}</div>
+                        ${c.timeNote ? `<div class="mobile-course-time-note">${c.timeNote}</div>` : ""}
                         ${info.makeupFrom ? `<div class="mobile-course-swap-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>调 ${makeupSourceLabel(info.makeupFrom)} 的课</div>` : ""}
                         <div class="mobile-course-info">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
@@ -3254,7 +3287,6 @@
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                             ${(c.building && !c.room.startsWith(c.building)) ? c.building + " " : ""}${c.room}
                         </div>
-                        ${c.timeNote ? `<div class="mobile-course-time-note">${c.timeNote}</div>` : ""}
                     `;
                     return card;
                 };
@@ -3284,12 +3316,9 @@
 
         // 启动应用
         window.addEventListener("DOMContentLoaded", init);
-        
-        // 监听屏幕尺寸变化适配样式
-        window.addEventListener('resize', () => {
-            const select = document.getElementById("week-select");
-            renderSchedule(parseInt(select.value));
-        });
+        // 这里原来挂着"窗口尺寸一变就 renderSchedule 重画整表"——渲染结果跟宽度无关
+        // （窄屏/宽屏全靠 CSS 媒体查询），重画只会把正在闪的卡片、点亮的列一起冲掉。
+        // 2026-10-08 删掉，别再加回来。
     </script>
 </body>
 </html>
