@@ -1644,10 +1644,32 @@
             // ================= 星期五 =================
             { name: "中国共产党史(L)", teacher: "任少执", room: "3-B501", building: "三教", realTime: "08:00-09:40", weekStart: 1, weekEnd: 8, day: 5, time: "1-2", type: "theory" },
 
-            // ================= 9-18周 实训/实践 (归入 full 全天节次) =================
-            // 注意：以下 6 条来自教务系统截图/《下学期课程安排整理》，桌面《课程安排.txt》未收录，
+            // ================= 9-10周 数据库应用实训（按具体节次排） =================
+            // 依据：用户 2026-10-15 给的实训安排表（地点/周/星期/节次）。原先是"全天集中"占位，现按表拆开。
+            // 表里的"5-8节""1-4节"跨两个节次，拆成两张卡分别落在两行，提示条也能按小节报时间。
+            // 西教的作息表手上没有，realTime 暂按三教基准填，卡片上用 timeNote 标出来，拿到西教作息再改。
+            // 第 9 周：周一、二、四在西348-2，周三在西147；周五无课
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 1, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 1, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 2, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 2, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西147", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 3, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西147", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 3, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "08:00-09:40", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 4, time: "1-2", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "10:20-12:00", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 4, time: "3-4", type: "practical" },
+            // 第 10 周：周二到周五都在西348-2；周一无课
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 2, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 2, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 3, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 3, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 4, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 4, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 5, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 5, time: "7-8", type: "practical" },
+
+            // ================= 11-18周 实训/实践 (归入 full 全天节次) =================
+            // 注意：以下 5 条来自教务系统截图/《下学期课程安排整理》，桌面《课程安排.txt》未收录，
             // 该 txt 的阶段总览甚至写明"第9-12周 无排课"。经用户 2026-08-24 确认后保留原样，未按 txt 删除。
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "专项安排", weekStart: 9, weekEnd: 10, day: "all", time: "full", type: "practical" },
             { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "专项安排", weekStart: 11, weekEnd: 12, day: "all", time: "full", type: "practical" },
             { name: "网络应用与编程实训(E)", teacher: "赵腾飞、郑宏云", room: "专项安排", weekStart: 13, weekEnd: 14, day: "all", time: "full", type: "practical" },
             { name: "岗位实践(E)", teacher: "郑宏云、刘彤、金乾隆、周勇、赵腾飞", room: "长线安排", weekStart: 13, weekEnd: 18, day: "all", time: "full", type: "practical" },
@@ -1961,8 +1983,11 @@
         }
 
         // 本周有没有全天实训（理论课找不着时用它兜底，免得实训周提示条一片空白）
-        function findPracticalOfWeek(week) {
-            const list = courses.filter(c => c.type === "practical" && week >= c.weekStart && week <= c.weekEnd);
+        // fullDayOnly：提示条兜底只认"全天集中"那种；按节次排的实训（如 9-10 周数据库）有 realTime，
+        // 早被 findUpcomingClass 找到了，落到兜底时不能再把它说成"全天集中安排"
+        function findPracticalOfWeek(week, fullDayOnly) {
+            const list = courses.filter(c => c.type === "practical" && week >= c.weekStart && week <= c.weekEnd
+                && (!fullDayOnly || c.time === "full"));
             if (!list.length) return null;
             // 岗位实践是 13-18 周的长线安排，会和短期专项实训重叠，优先报周期短的那个
             return list.slice().sort((a, b) => (a.weekEnd - a.weekStart) - (b.weekEnd - b.weekStart))[0];
@@ -2067,17 +2092,24 @@
                 return;
             }
 
-            // 没有理论课了，看看当前这周是不是在实训
-            const practical = findPracticalOfWeek(realCurrentWeek);
+            // 没有按节次的课了，看看这周 / 下周是不是全天集中实训。
+            // 要看下周：第 10 周周五数据库实训下课后，下一件事是第 11 周的 Java 课程设计，
+            // 只看本周会误报"接下来没有排课"
+            let practicalWeek = realCurrentWeek;
+            let practical = findPracticalOfWeek(practicalWeek, true);
+            if (!practical && realCurrentWeek < TOTAL_WEEKS) {
+                practicalWeek = realCurrentWeek + 1;
+                practical = findPracticalOfWeek(practicalWeek, true);
+            }
             bar.classList.remove("is-ongoing");
             setIcon(iconEl, ICON_COFFEE);
             arrowEl.hidden = false;
-            nextClassTargetWeek = realCurrentWeek;
+            nextClassTargetWeek = practical ? practicalWeek : realCurrentWeek;
             nextClassTargetIdx = practical ? courses.indexOf(practical) : null;
             nextClassTargetDay = null;   // 全天实训周一到周五都有，滚到哪张都行
 
             if (practical) {
-                titleEl.textContent = "本周 · " + practical.name;
+                titleEl.textContent = (practicalWeek === realCurrentWeek ? "本周 · " : "下周 · ") + practical.name;
                 setLine(whenEl, "全天集中安排，无固定节次");
                 setLine(whereEl, practical.room + " · " + practical.teacher);
             } else {
