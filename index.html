@@ -965,11 +965,6 @@
         }
         .time-footnote strong { color: var(--text-main); }
         .time-footnote ul { margin: 6px 0 0; padding-left: 1.2em; }
-        .footnote-caveat {
-            margin: 10px 0 0;
-            font-size: 0.78rem;
-            line-height: 1.6;
-        }
         /* 打开作息表的按钮：跟正文同一行内的次要操作，做成描边胶囊 */
         .timesheet-open-btn {
             display: inline-flex;
@@ -1337,8 +1332,7 @@
             .mobile-view-toggle,
             .next-class-bar,
             .timesheet-open-btn,
-            .modal-overlay,
-            .footnote-caveat { display: none !important; }
+            .modal-overlay { display: none !important; }
 
             /* 下拉被隐藏了，改在标题旁边打出当前是第几周 */
             .print-week {
@@ -1534,12 +1528,11 @@
 
         <!-- 各教学楼作息差异说明：同一节次在不同教学楼的起止时间不同，卡片上的时间才是实际时间 -->
         <div class="time-footnote">
-            <strong>⏱ 关于上课时间</strong>：左侧节次列<strong>以第三教学楼（三教）作息为基准</strong>；二教、东教的时间不一样，<strong>每张课程卡片上的时间才是这门课的实际起止时间</strong>。
+            <strong>⏱ 关于上课时间</strong>：左侧节次列<strong>以第三教学楼（三教）作息为基准</strong>；二教、西教、东教的时间不一样，<strong>每张课程卡片上的时间才是这门课的实际起止时间</strong>。
             <button type="button" class="timesheet-open-btn" id="btn-open-timesheet">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 查看各教学楼完整作息表
             </button>
-            <p class="footnote-caveat">注：11-12 节本学期无排课，左侧显示的 19:50-21:30 沿用建站时的旧数据，<strong>校方作息表里查不到这一节次</strong>，仅作占位。</p>
         </div>
 
         <!-- 各教学楼作息表弹窗 -->
@@ -1556,7 +1549,7 @@
                     <thead>
                         <tr>
                             <th>节次</th>
-                            <th>一/二教</th>
+                            <th>一/二/西教</th>
                             <th class="is-base">三教</th>
                             <th>东教</th>
                         </tr>
@@ -1564,45 +1557,51 @@
                     <tbody>
                         <tr>
                             <td class="slot-name">1-2节</td>
-                            <td data-label="一/二教">08:00-09:40</td>
+                            <td data-label="一/二/西教">08:00-09:40</td>
                             <td data-label="三教" class="is-base">08:00-09:40</td>
                             <td data-label="东教">08:00-09:30</td>
                         </tr>
                         <tr class="is-break">
                             <td class="slot-name">课间</td>
-                            <td data-label="一/二教">09:40-10:00</td>
+                            <td data-label="一/二/西教">09:40-10:00</td>
                             <td data-label="三教" class="is-base">09:40-10:20<br><span class="break-tag">大课间</span></td>
                             <td data-label="东教">09:30-10:20</td>
                         </tr>
                         <tr>
                             <td class="slot-name">3-4节</td>
-                            <td data-label="一/二教">10:00-11:40</td>
+                            <td data-label="一/二/西教">10:00-11:40</td>
                             <td data-label="三教" class="is-base">10:20-12:00</td>
                             <td data-label="东教">10:20-11:50</td>
                         </tr>
                         <tr class="is-break">
                             <td class="slot-name">午休</td>
-                            <td data-label="一/二教">11:40-14:00</td>
+                            <td data-label="一/二/西教">11:40-14:00</td>
                             <td data-label="三教" class="is-base">12:00-14:00</td>
                             <td data-label="东教">11:50-14:00</td>
                         </tr>
                         <tr>
                             <td class="slot-name">5-6节</td>
-                            <td data-label="一/二教">14:00-15:35</td>
+                            <td data-label="一/二/西教">14:00-15:35</td>
                             <td data-label="三教" class="is-base">14:00-15:35</td>
                             <td data-label="东教">14:00-15:30</td>
                         </tr>
                         <tr>
                             <td class="slot-name">7-8节</td>
-                            <td data-label="一/二教">15:55-17:30</td>
+                            <td data-label="一/二/西教">15:55-17:30</td>
                             <td data-label="三教" class="is-base">15:55-17:30</td>
                             <td data-label="东教">16:00-17:30</td>
                         </tr>
                         <tr>
                             <td class="slot-name">9-10节</td>
-                            <td data-label="一/二教">18:00-19:40</td>
+                            <td data-label="一/二/西教">18:00-19:40</td>
                             <td data-label="三教" class="is-base">18:00-19:40</td>
                             <td data-label="东教">18:00-19:40</td>
+                        </tr>
+                        <tr>
+                            <td class="slot-name">11-12节</td>
+                            <td data-label="一/二/西教">19:50-21:30</td>
+                            <td data-label="三教" class="is-base">19:50-21:30</td>
+                            <td data-label="东教">19:50-21:30</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1619,7 +1618,7 @@
         // 左侧节次列显示的是"三教基准"时间（用户 2026-08-24 指定），只作参照；
         // 具体某门课几点上，一律以卡片上的 realTime 为准。
         // 7-8 / 9-10 节的三教时间已与校方作息表核对一致（见页面底部的作息表弹窗）；
-        // 只剩 11-12 节的 19:50-21:30 查不到出处，本学期这一节次也无课，暂作占位保留。
+        // 11-12 节 19:50-21:30 也已在校方表里核到（四个教学区相同，用户 2026-10-15 提供）。
         const courses = [
             // ================= 星期一 =================
             { name: "计算机图形学(L)", teacher: "丁革媛", room: "3-A101", building: "三教", realTime: "10:20-12:00", weekStart: 1, weekEnd: 6, day: 1, time: "3-4", type: "theory" },
@@ -1647,25 +1646,25 @@
             // ================= 9-10周 数据库应用实训（按具体节次排） =================
             // 依据：用户 2026-10-15 给的实训安排表（地点/周/星期/节次）。原先是"全天集中"占位，现按表拆开。
             // 表里的"5-8节""1-4节"跨两个节次，拆成两张卡分别落在两行，提示条也能按小节报时间。
-            // 西教的作息表手上没有，realTime 暂按三教基准填，卡片上用 timeNote 标出来，拿到西教作息再改。
+            // 西教作息与一/二教完全相同（校方《各教学区上课时间》表，用户 2026-10-15 提供），3-4 节是 10:00-11:40。
             // 第 9 周：周一、二、四在西348-2，周三在西147；周五无课
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 1, time: "5-6", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 1, time: "7-8", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 2, time: "5-6", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 2, time: "7-8", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西147", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 3, time: "5-6", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西147", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 3, time: "7-8", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "08:00-09:40", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 4, time: "1-2", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "10:20-12:00", timeNote: "西教作息未核实，暂按三教", weekStart: 9, weekEnd: 9, day: 4, time: "3-4", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 9, weekEnd: 9, day: 1, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 9, weekEnd: 9, day: 1, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 9, weekEnd: 9, day: 2, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 9, weekEnd: 9, day: 2, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西147", building: "西教", realTime: "14:00-15:35", weekStart: 9, weekEnd: 9, day: 3, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西147", building: "西教", realTime: "15:55-17:30", weekStart: 9, weekEnd: 9, day: 3, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "08:00-09:40", weekStart: 9, weekEnd: 9, day: 4, time: "1-2", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "10:00-11:40", weekStart: 9, weekEnd: 9, day: 4, time: "3-4", type: "practical" },
             // 第 10 周：周二到周五都在西348-2；周一无课
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 2, time: "5-6", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 2, time: "7-8", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 3, time: "5-6", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 3, time: "7-8", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 4, time: "5-6", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 4, time: "7-8", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 5, time: "5-6", type: "practical" },
-            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", timeNote: "西教作息未核实，暂按三教", weekStart: 10, weekEnd: 10, day: 5, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 10, weekEnd: 10, day: 2, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 10, weekEnd: 10, day: 2, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 10, weekEnd: 10, day: 3, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 10, weekEnd: 10, day: 3, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 10, weekEnd: 10, day: 4, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 10, weekEnd: 10, day: 4, time: "7-8", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 10, weekEnd: 10, day: 5, time: "5-6", type: "practical" },
+            { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 10, weekEnd: 10, day: 5, time: "7-8", type: "practical" },
 
             // ================= 11-18周 实训/实践 (归入 full 全天节次) =================
             // 注意：以下 5 条来自教务系统截图/《下学期课程安排整理》，桌面《课程安排.txt》未收录，
