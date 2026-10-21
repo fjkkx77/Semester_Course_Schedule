@@ -2815,8 +2815,17 @@
                 tipTimer = setTimeout(() => tip.classList.remove("is-shown"), 3200);
             }
 
+            // 第几次下拉：兜底解锁 / 作罢之后，上一次还没回来的检查一律作废。不然锁屏回来时检查被重新计时、跟 10 秒兜底错开，
+            // 转圈先收了、过几秒页面又突然刷新或冒出「网络不好」，甚至作用到下一次下拉上（审查指出）
+            let attempt = 0;
+            // 检查那几秒里用户动过表单（真实的输入 / 勾选）：整页重新加载会把它冲掉，就不刷了（审查指出）
+            let edited = false;
+            const onEdit = (e) => { if (e.isTrusted && refreshing && !reloading) edited = true; };
+            document.addEventListener("input", onEdit, true);
+            document.addEventListener("change", onEdit, true);
             // 刷新没真发生（断网被拦下来 / 重新加载一直没回来）：收回指示器，手势恢复可用
             function giveUp() {
+                attempt++;
                 refreshing = false;
                 reloading = false;
                 clearTimeout(unlockTimer);
@@ -2903,24 +2912,27 @@
                 el.style.opacity = "1";
                 // 留一帧让 spinner 转起来，不然点下去像没反应就白屏了
                 window.__pullRefreshFired = true;   // 给自动化测试用：区分是这里刷的还是别的原因重载
+                const my = ++attempt; edited = false;
+                const live = (fn) => () => { if (my === attempt) fn(); };   // 这一次作废了就什么都不做
                 setTimeout(() => {
+                    if (my !== attempt) return;
                     // 没有 Service Worker：断网时 reload 会变成错误页，主屏幕窗口里连返回键都没有
                     if (navigator.onLine === false) {
                         showTip("当前没有网络，先不刷新了。等有网了再拉一次。");
                         giveUp();
                         return;
                     }
-                    safeReload(() => {
-                        // 检查网络那几秒页面是能用的：这期间要是打开了日期面板 / 作息表，整页重新加载会把它冲掉——作罢
-                        if (overlayOpen()) { giveUp(); return; }
+                    safeReload(live(() => {
+                        // 检查网络那几秒页面是能用的：这期间要是打开了日期面板 / 作息表、动过表单，整页重新加载会把它冲掉——作罢
+                        if (overlayOpen() || edited) { giveUp(); return; }
                         reloading = true;
                         // 兜底从真正开始重新加载算起：检查网络可能已经用掉 6 秒，不重算的话重新加载只剩 3~4 秒就被解锁，iOS 冻住的旧页面又能滑出空白
                         armUnlock();
                         location.reload();
-                    }, () => {
+                    }), live(() => {
                         showTip("网络不好，这次没刷新。稍后再拉一次。");
                         giveUp();
-                    });
+                    }));
                 }, 260);
                 // 兜底：重新加载被取消或一直卡着时，10 秒后解锁，别让页面永远滑不动
                 armUnlock();
