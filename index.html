@@ -1689,6 +1689,18 @@
             { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 10, weekEnd: 10, day: 5, time: "5-6", type: "practical" },
             { name: "数据库应用实训(E)", teacher: "丁革媛、李翠玉", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 10, weekEnd: 10, day: 5, time: "7-8", type: "practical" },
 
+            // ================= 11-12周 Java课程设计（按具体节次排） =================
+            // 依据：《【课程通知】Java 课程设计 11-12 周课表》（用户 2026-10-29 转来）。原先是"全天集中"占位，现按表拆开。
+            // 两周安排相同：周一、二 5-8 节，周三、五 1-4 节，都在西348-2；周四无课。西教作息同一/二教。
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 11, weekEnd: 12, day: 1, time: "5-6", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 11, weekEnd: 12, day: 1, time: "7-8", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 11, weekEnd: 12, day: 2, time: "5-6", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 11, weekEnd: 12, day: 2, time: "7-8", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "08:00-09:40", weekStart: 11, weekEnd: 12, day: 3, time: "1-2", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "10:00-11:40", weekStart: 11, weekEnd: 12, day: 3, time: "3-4", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "08:00-09:40", weekStart: 11, weekEnd: 12, day: 5, time: "1-2", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "10:00-11:40", weekStart: 11, weekEnd: 12, day: 5, time: "3-4", type: "practical" },
+
             // ================= 13-14周 形势与政策3（雨课堂线上，晚上 9-10 节） =================
             // 来源：教务表《形势与政策3、7》计算机[2501-2502]班那行（课程编码 3461665，2026-10-27 用户提供）。
             // 线上课没有教学楼；9-10 节四个教学区作息相同，都是 18:00-19:40。
@@ -1696,9 +1708,8 @@
             { name: "形势与政策3", teacher: "高瑞", room: "雨课堂（线上）", realTime: "18:00-19:40", weekStart: 13, weekEnd: 14, day: 4, time: "9-10", type: "theory" },
 
             // ================= 11-18周 实训/实践 (归入 full 全天节次) =================
-            // 注意：以下 5 条来自教务系统截图/《下学期课程安排整理》，桌面《课程安排.txt》未收录，
+            // 注意：以下 4 条来自教务系统截图/《下学期课程安排整理》，桌面《课程安排.txt》未收录，
             // 该 txt 的阶段总览甚至写明"第9-12周 无排课"。经用户 2026-08-24 确认后保留原样，未按 txt 删除。
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "专项安排", weekStart: 11, weekEnd: 12, day: "all", time: "full", type: "practical" },
             { name: "网络应用与编程实训(E)", teacher: "赵腾飞、郑宏云", room: "专项安排", weekStart: 13, weekEnd: 14, day: "all", time: "full", type: "practical" },
             { name: "岗位实践(E)", teacher: "郑宏云、刘彤、金乾隆、周勇、赵腾飞", room: "长线安排", weekStart: 13, weekEnd: 18, day: "all", time: "full", type: "practical" },
             { name: "移动应用开发实训(E)", teacher: "周勇、宋扬", room: "专项安排", weekStart: 15, weekEnd: 16, day: "all", time: "full", type: "practical" },
@@ -2121,7 +2132,7 @@
             }
 
             // 没有按节次的课了，看看这周 / 下周是不是全天集中实训。
-            // 要看下周：第 10 周周五数据库实训下课后，下一件事是第 11 周的 Java 课程设计，
+            // 要看下周：本周按节次的课都上完、下周才开始全天集中实训时，
             // 只看本周会误报"接下来没有排课"
             let practicalWeek = realCurrentWeek;
             let practical = findPracticalOfWeek(practicalWeek, true);
