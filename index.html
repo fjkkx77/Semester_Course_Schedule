@@ -1691,15 +1691,23 @@
 
             // ================= 11-12周 Java课程设计（按具体节次排） =================
             // 依据：《【课程通知】Java 课程设计 11-12 周课表》（用户 2026-10-29 转来）。原先是"全天集中"占位，现按表拆开。
-            // 两周安排相同：周一、二 5-8 节，周三、五 1-4 节，都在西348-2；周四无课。西教作息同一/二教。
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 11, weekEnd: 12, day: 1, time: "5-6", type: "practical" },
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 11, weekEnd: 12, day: 1, time: "7-8", type: "practical" },
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 11, weekEnd: 12, day: 2, time: "5-6", type: "practical" },
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 11, weekEnd: 12, day: 2, time: "7-8", type: "practical" },
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "08:00-09:40", weekStart: 11, weekEnd: 12, day: 3, time: "1-2", type: "practical" },
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "10:00-11:40", weekStart: 11, weekEnd: 12, day: 3, time: "3-4", type: "practical" },
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "08:00-09:40", weekStart: 11, weekEnd: 12, day: 5, time: "1-2", type: "practical" },
-            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "10:00-11:40", weekStart: 11, weekEnd: 12, day: 5, time: "3-4", type: "practical" },
+            // 两周节次相同：周一、二 5-8 节，周三、五 1-4 节；周四无课。西教作息同一/二教。
+            // 2026-11-05 班群通知：348-2 地板损坏，从 11-06（第 11 周周五）起改到西楼 147 机房，时间不变。
+            // 所以第 11 周周一至周三仍是西348-2（已上完），第 11 周周五和第 12 周全部是西147。
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 11, weekEnd: 11, day: 1, time: "5-6", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 11, weekEnd: 11, day: 1, time: "7-8", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "14:00-15:35", weekStart: 11, weekEnd: 11, day: 2, time: "5-6", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "15:55-17:30", weekStart: 11, weekEnd: 11, day: 2, time: "7-8", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "08:00-09:40", weekStart: 11, weekEnd: 11, day: 3, time: "1-2", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西348-2", building: "西教", realTime: "10:00-11:40", weekStart: 11, weekEnd: 11, day: 3, time: "3-4", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "14:00-15:35", weekStart: 12, weekEnd: 12, day: 1, time: "5-6", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "15:55-17:30", weekStart: 12, weekEnd: 12, day: 1, time: "7-8", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "14:00-15:35", weekStart: 12, weekEnd: 12, day: 2, time: "5-6", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "15:55-17:30", weekStart: 12, weekEnd: 12, day: 2, time: "7-8", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "08:00-09:40", weekStart: 12, weekEnd: 12, day: 3, time: "1-2", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "10:00-11:40", weekStart: 12, weekEnd: 12, day: 3, time: "3-4", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "08:00-09:40", weekStart: 11, weekEnd: 12, day: 5, time: "1-2", type: "practical" },
+            { name: "Java课程设计(@)", teacher: "袁中臣、周勇", room: "西147", building: "西教", realTime: "10:00-11:40", weekStart: 11, weekEnd: 12, day: 5, time: "3-4", type: "practical" },
 
             // ================= 13-14周 形势与政策3（雨课堂线上，晚上 9-10 节） =================
             // 来源：教务表《形势与政策3、7》计算机[2501-2502]班那行（课程编码 3461665，2026-10-27 用户提供）。
